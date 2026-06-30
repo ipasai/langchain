@@ -1,5 +1,10 @@
 langchain>=0.3.0
 langchain-openai>=0.1.0
 langchain-ollama>=0.1.0
-langchain-google-genai>=0.1.0  # 新增這個
+langchain-google-genai>=0.1.0
 python-dotenv>=1.0.0
+streamlit>=1.28.0  # 可選：用於 Web UI，CLI 版本不需要此項
+pymysql>=1.0.0
+psycopg2-binary>=2.9.0
+redis>=4.0.0
+pymongo>=4.0.0
