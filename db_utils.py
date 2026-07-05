@@ -1,4 +1,6 @@
+import os
 import sqlite3
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -14,6 +16,248 @@ class DBType(Enum):
 
 class DBConnectionError(Exception):
     pass
+
+
+def _default_sqlite_path() -> str:
+    return os.path.join(os.path.dirname(__file__), "data", "app_memory.db")
+
+
+def _ensure_table_column(connection: sqlite3.Connection, table_name: str, column_name: str, column_definition: str) -> None:
+    columns = [row[1] for row in connection.execute(f"PRAGMA table_info('{table_name}')").fetchall()]
+    if column_name not in columns:
+        connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
+
+
+def ensure_local_memory_database(db_path: Optional[str] = None) -> str:
+    """確保本地 SQLite 記憶資料庫與所需資料表存在。"""
+    if not db_path:
+        db_path = _default_sqlite_path()
+
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    connection = sqlite3.connect(db_path)
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)"
+        )
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS english_practice (id INTEGER PRIMARY KEY AUTOINCREMENT, english TEXT NOT NULL, translation TEXT NOT NULL, example TEXT, created_at TEXT NOT NULL)"
+        )
+        _ensure_table_column(connection, "english_practice", "example", "TEXT")
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS study_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, test_type TEXT NOT NULL, score INTEGER NOT NULL, total INTEGER NOT NULL, accuracy REAL NOT NULL, created_at TEXT NOT NULL)"
+        )
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS daily_review_state (id INTEGER PRIMARY KEY AUTOINCREMENT, review_date TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return db_path
+
+
+def save_setting(key: str, value: str, db_path: Optional[str] = None) -> None:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, value, datetime.utcnow().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def load_setting(key: str, default: Optional[str] = None, db_path: Optional[str] = None) -> Optional[str]:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        row = connection.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else default
+    finally:
+        connection.close()
+
+
+def save_chat_message(role: str, content: str, db_path: Optional[str] = None) -> None:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO chat_messages (role, content, created_at) VALUES (?, ?, ?)",
+            (role, content, datetime.utcnow().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def load_recent_chat_messages(limit: int = 20, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT role, content, created_at FROM chat_messages ORDER BY id ASC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [{"role": row[0], "content": row[1], "created_at": row[2]} for row in rows]
+    finally:
+        connection.close()
+
+
+def clear_chat_messages(db_path: Optional[str] = None) -> None:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("DELETE FROM chat_messages")
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def save_translation_entry(english: str, translation: str, example: str = "", db_path: Optional[str] = None, category: Optional[str] = None) -> None:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        _ensure_table_column(connection, "english_practice", "category", "TEXT")
+        connection.execute(
+            "INSERT INTO english_practice (english, translation, example, category, created_at) VALUES (?, ?, ?, ?, ?)",
+            (english.lower().strip(), translation.strip(), example.strip(), (category or "未分類").strip(), datetime.utcnow().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def delete_translation_entry(english: str, db_path: Optional[str] = None) -> int:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        cursor = connection.execute(
+            "DELETE FROM english_practice WHERE lower(english) = ?",
+            (english.lower().strip(),),
+        )
+        connection.commit()
+        return cursor.rowcount
+    finally:
+        connection.close()
+
+
+def search_translation_entries(query: str, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        search_term = f"%{query.lower().strip()}%"
+        rows = connection.execute(
+            "SELECT english, translation, example, created_at FROM english_practice WHERE lower(english) LIKE ? OR lower(translation) LIKE ? ORDER BY id DESC LIMIT 10",
+            (search_term, search_term),
+        ).fetchall()
+        return [{"english": row[0], "translation": row[1], "example": row[2], "created_at": row[3]} for row in rows]
+    finally:
+        connection.close()
+
+
+def record_english_practice(english: str, translation: str, example: str = "", db_path: Optional[str] = None) -> None:
+    save_translation_entry(english, translation, example, db_path=db_path)
+
+
+def list_english_practice_items(limit: int = 10, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        _ensure_table_column(connection, "english_practice", "category", "TEXT")
+        rows = connection.execute(
+            "SELECT english, translation, example, category, created_at FROM english_practice ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [{"english": row[0], "translation": row[1], "example": row[2], "category": row[3] or "未分類", "created_at": row[4]} for row in rows]
+    finally:
+        connection.close()
+
+
+def record_study_session(test_type: str, score: int, total: int, db_path: Optional[str] = None) -> None:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        accuracy = round(score / total, 2) if total else 0.0
+        connection.execute(
+            "INSERT INTO study_sessions (test_type, score, total, accuracy, created_at) VALUES (?, ?, ?, ?, ?)",
+            (test_type, score, total, accuracy, datetime.utcnow().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def list_study_sessions(limit: int = 10, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT test_type, score, total, accuracy, created_at FROM study_sessions ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [{"test_type": row[0], "score": row[1], "total": row[2], "accuracy": row[3], "created_at": row[4]} for row in rows]
+    finally:
+        connection.close()
+
+
+def save_daily_review_state(review_date: str, db_path: Optional[str] = None) -> None:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT OR REPLACE INTO daily_review_state (review_date, created_at) VALUES (?, ?)",
+            (review_date, datetime.utcnow().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def load_daily_review_state(db_path: Optional[str] = None) -> Optional[str]:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        row = connection.execute("SELECT review_date FROM daily_review_state ORDER BY id DESC LIMIT 1").fetchone()
+        return row[0] if row else None
+    finally:
+        connection.close()
+
+
+def should_show_daily_review_reminder(db_path: Optional[str] = None, today: Optional[str] = None) -> bool:
+    if not today:
+        today = datetime.utcnow().date().isoformat()
+    last_review = load_daily_review_state(db_path=db_path)
+    return last_review != today
+
+
+def get_learning_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        total_items = connection.execute("SELECT COUNT(*) FROM english_practice").fetchone()[0]
+        total_sessions = connection.execute("SELECT COUNT(*) FROM study_sessions").fetchone()[0]
+        total_score = connection.execute("SELECT COALESCE(SUM(score), 0) FROM study_sessions").fetchone()[0]
+        total_questions = connection.execute("SELECT COALESCE(SUM(total), 0) FROM study_sessions").fetchone()[0]
+        accuracy = round(total_score / total_questions, 2) if total_questions else 0.0
+        recent_accuracy = connection.execute(
+            "SELECT accuracy FROM study_sessions ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+        latest_accuracy = round(sum(row[0] for row in recent_accuracy) / len(recent_accuracy), 2) if recent_accuracy else 0.0
+        return {
+            "total_items": total_items,
+            "total_sessions": total_sessions,
+            "total_score": total_score,
+            "total_questions": total_questions,
+            "accuracy": accuracy,
+            "latest_accuracy": latest_accuracy,
+        }
+    finally:
+        connection.close()
 
 
 def _import_module(module_name: str, package_hint: Optional[str] = None):

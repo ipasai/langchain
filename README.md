@@ -1,262 +1,115 @@
 # LangChain 多模型交互式應用
 
-用 LangChain 寫的 AI 專案，支援多模型切換和直觀的使用者介面。
+這是一個整合多模型 AI 對話、資料庫管理與英文學習的 Streamlit 應用，支援本機與雲端模型切換，並將學習資料保存到本機 SQLite。
 
-## ✨ 功能特性
+## ✨ 目前功能總覽
 
-1. ✅ 使用本機的 Ollama AI 模型
-2. ✅ 建立 `.env` 來儲存相關設定
-3. ✅ 產生了一個專門用來使用 Ollama、OpenAI 與 Google AI 連線的物件
-4. ✅ **可以切換參數方式來呼叫使用不同的模型**
-5. ✅ **增加使用者介面來輸入提示詞內容並呼叫模型進行操作**
-6. 可以再幫我加上連接資料庫的功能設定頁面功能 並且可以選擇連結的資料庫為 mysql sqlite postgres redis mongodb mariadb 等類型 並且將在輸入相關選車與設定後進行式資料庫的測試連結 並進行資料庫的相關分析並且輸出到畫面上可以初步了解目前所連結的DB相關資訊 且許要有一個介面可以用自然語言輸入想要查詢該資料庫的任何敘述後讓AI模型協助產出sql語法並顯示在畫面上
+- ✅ 支援 Ollama、OpenAI、Google Gemini 三種模型提供者
+- ✅ 支援 AI 對話、提示詞輸入與對話歷史保存
+- ✅ 支援資料庫連線測試與資料表結構分析
+- ✅ 支援 SQLite / MySQL / PostgreSQL / MariaDB / Redis / MongoDB 連線
+- ✅ 支援 SQL 查詢執行、資料表預覽、資料列 CRUD、單筆刪除與表格編輯
+- ✅ 支援字典式查詢：先查詢本機資料庫，找不到時才呼叫大模型
+- ✅ 支援翻譯結果、例句生成、例句合併與完整儲存
+- ✅ 支援英文單字分類管理、單字卡片複習、測驗與學習統計
+- ✅ 支援單字清單刪除與依分類排序管理
 
 ## 🚀 快速開始
 
 ### 環境要求
 - Python 3.10+
-- 已安裝的相依套件（見下方安裝步驟）
+- 安裝相依套件
 
 ### 安裝
 
 ```bash
-# 1. 激活虛擬環境
 source .venv/bin/activate
-
-# 2. 安裝相依套件
 pip install -r requirements.txt
-
-# 3. 配置 .env 檔案（如有需要）
-# 編輯 .env 檔案並設定相應的 API 金鑰
 ```
 
-### 運行應用
+### 啟動應用
 
 ```bash
-# 啟動主菜單，選擇運行模式
 python main.py
 ```
 
-## 🎯 使用指南
-
-### 模式選擇
-
-當運行 `python main.py` 時，會出現以下選項：
-
-#### 1️⃣ CLI 模式（命令行交互）
-
-最簡單直接的使用方式：
-
-```bash
-python cli.py
-```
-
-特點：
-- 命令行交互式界面
-- 易於腳本集成
-- 無須安裝額外依賴
-
-過程：
-1. 選擇 AI 模型提供者（Ollama、OpenAI、Google Gemini）
-2. 選擇具體模型
-3. 配置溫度參數（0.0-1.0）
-4. 輸入提示詞並獲取回應
-5. 支援多輪對話
-
-#### 2️⃣ Web UI 模式（Streamlit 網頁應用）
-
-功能豐富的圖形界面：
+也可以直接啟動網頁版：
 
 ```bash
 streamlit run app.py
 ```
 
-特點：
-- 漂亮的 Web 界面
-- 實時對話歷史顯示
-- 側邊欄設定面板
-- 支援清除對話歷史
-- 自動重新整理
+## 🧭 功能分頁介紹
 
-功能：
-- 🎛️ 模型選擇下拉菜單
-- 🌡️ 溫度滑塊調整
-- 💬 對話歷史記錄
-- 🗑️ 一鍵清除歷史
+### 1. AI 對話頁籤
+- 可選擇模型提供者與溫度
+- 輸入提示詞後獲得 AI 回應
+- 對話歷史會保存到本機資料庫
 
-#### 3️⃣ 測試連線
+### 2. 資料庫管理頁籤
+- 選擇資料庫類型並填入連線設定
+- 點擊測試連線後可檢視資料表、欄位、關聯與預覽資料
+- 支援 SQL 查詢、資料列新增/更新/刪除、CSV 下載與資料表編輯
+- 重新載入按鈕會重整目前資料表結構
 
-測試所有模型提供者的連線狀態：
+### 3. 英文學習頁籤
+- 新增單字與中文翻譯
+- 可為單字附加例句並儲存
+- 支援分類管理與目前分類單字清單
+- 可刪除單筆單字、查看例句與進行卡片式複習
+- 提供 TOEFL 風格測驗與學習成效圖表
+
+## 🔍 字典式查詢流程
+
+1. 先在本機資料庫中查詢是否已有相同英文或中文記錄
+2. 若有記錄，直接使用已保存的翻譯與例句
+3. 若沒有，才請大模型生成中文意思與例句
+4. 生成的例句可追加到原有例句清單中
+5. 儲存時會把完整例句串接後寫入資料庫，方便之後查詢與顯示
+
+## 📄 簡報檔
+
+可直接開啟簡報檔：
+- [APP_FEATURES_PRESENTATION.html](APP_FEATURES_PRESENTATION.html)
+
+## 🧪 測試
+
+已加入對以下功能的自動化測試：
+- 資料庫查詢與 CRUD
+- 英文學習資料儲存與搜尋
+- 例句合併與單筆刪除
+- 本機資料庫欄位遷移
+
+執行方式：
 
 ```bash
-# 在主菜單中選擇選項 3
-python main.py
+python -m unittest discover -s tests -v
 ```
 
-或直接在 Python 程式碼中測試：
-
-```python
-from llm_factory import LLMFactory, ModelProvider
-from langchain_core.messages import HumanMessage
-
-llm = LLMFactory.get_llm(ModelProvider.OLLAMA)
-messages = [HumanMessage(content="你好")]
-response = llm.invoke(messages)
-print(response.content)
-```
-
-## 🔧 配置 .env 檔案
-
-編輯 `.env` 檔案以配置不同的模型和 API 金鑰：
+## ⚙️ .env 設定範例
 
 ```env
-# OpenAI 設定
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-4o-mini
-
-# Ollama 本地設定
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3
-
-# Google AI Studio 設定
 GOOGLE_API_KEY=your_google_api_key_here
 GOOGLE_MODEL=gemini-2.5-flash
 ```
 
-## 📦 支援的模型
+## 📦 專案結構
 
-### Ollama（本地）
-- llama3
-- mistral
-- neural-chat
-- dolphin-mixtral
-- 其他本地模型
-
-### OpenAI（雲端）
-- gpt-4o
-- gpt-4o-mini
-- gpt-4-turbo
-- gpt-3.5-turbo
-
-### Google Gemini（雲端）
-- gemini-2.5-flash
-- gemini-1.5-pro
-- gemini-1.5-flash
-
-## 🏗️ 項目結構
-
-```
+```text
 langchain/
-├── llm_factory.py      # LLM 工廠類別，支援多種模型
-├── main.py             # 主入口點，提供菜單選擇
-├── cli.py              # 命令行交互應用
-├── app.py              # Streamlit Web UI 應用
-├── .env                # 環境變數配置
-├── requirements.txt    # Python 相依套件
-└── README.md           # 本檔案
+├── app.py
+├── cli.py
+├── db_utils.py
+├── llm_factory.py
+├── main.py
+├── README.md
+├── APP_FEATURES_PRESENTATION.html
+└── tests/
 ```
-
-## 📚 核心類別說明
-
-### LLMFactory
-
-工廠類別，提供統一介面來建立不同的 LLM 實例。
-
-```python
-from llm_factory import LLMFactory, ModelProvider
-
-# 使用 Ollama
-llm = LLMFactory.get_ollama_llm(model_name="llama3", temperature=0.7)
-
-# 使用 OpenAI
-llm = LLMFactory.get_openai_llm(model_name="gpt-4o-mini", temperature=0.5)
-
-# 使用 Google Gemini
-llm = LLMFactory.get_google_llm(model_name="gemini-2.5-flash", temperature=0.8)
-
-# 通用方法（推薦）
-llm = LLMFactory.get_llm(ModelProvider.OLLAMA, model_name="llama3")
-```
-
-### ModelProvider（列舉）
-
-定義支援的模型提供者：
-- `ModelProvider.OLLAMA` - 本地 Ollama 模型
-- `ModelProvider.OPENAI` - OpenAI 雲端服務
-- `ModelProvider.GOOGLE` - Google Gemini 雲端服務
-
-## 💡 使用示例
-
-### Python 腳本中使用
-
-```python
-from llm_factory import LLMFactory, ModelProvider
-from langchain_core.messages import HumanMessage
-
-# 創建 LLM 實例
-llm = LLMFactory.get_llm(
-    ModelProvider.OLLAMA,
-    model_name="llama3",
-    temperature=0.7
-)
-
-# 準備訊息
-messages = [HumanMessage(content="請解釋什麼是機器學習")]
-
-# 調用模型
-response = llm.invoke(messages)
-print(response.content)
-```
-
-### 切換不同模型
-
-```python
-from llm_factory import LLMFactory, ModelProvider
-
-# 創意寫作 - 使用較高溫度
-creative_llm = LLMFactory.get_llm(
-    ModelProvider.OPENAI,
-    model_name="gpt-4o",
-    temperature=0.9
-)
-
-# 精確任務 - 使用較低溫度
-precise_llm = LLMFactory.get_llm(
-    ModelProvider.OLLAMA,
-    model_name="llama3",
-    temperature=0.2
-)
-```
-
-## 🔄 溫度參數說明
-
-溫度參數（Temperature）控制模型輸出的隨機性：
-
-- **0.0** - 最確定，輸出最一致但可能重複
-- **0.5** - 平衡，兼具多樣性和穩定性
-- **1.0** - 最隨機，輸出最有創意但不可預測
-
-建議設定：
-- 翻譯、程式設計、精確分析：0.0-0.3
-- 一般對話、內容生成：0.5-0.7
-- 創意寫作、腦力激盪：0.8-1.0
-
-## ⚙️ 故障排除
-
-### Ollama 連線失敗
-- 確保 Ollama 已在後台運行：`ollama serve`
-- 檢查 `OLLAMA_BASE_URL` 是否正確配置
-- 確保模型已下載：`ollama pull llama3`
-
-### OpenAI 連線失敗
-- 檢查 `OPENAI_API_KEY` 是否正確設定
-- 確保 API 金鑰有效且未過期
-- 檢查網路連線
-
-### Google Gemini 連線失敗
-- 檢查 `GOOGLE_API_KEY` 是否正確設定
-- 確保在 Google AI Studio 創建了 API 金鑰
-- 檢查網路連線
 
 ### Streamlit 應用無法啟動
 ```bash

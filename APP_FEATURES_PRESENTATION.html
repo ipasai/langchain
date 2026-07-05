@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangChain 多模型應用功能簡報</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --accent: #6366f1;
+      --accent2: #14b8a6;
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+    }
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "Microsoft JhengHei", Arial, sans-serif;
+      background: linear-gradient(135deg, var(--bg), #111827 70%);
+      color: var(--text);
+    }
+    .slide {
+      min-height: 100vh;
+      padding: 56px 64px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slide h1 { font-size: 2.4rem; margin-bottom: 0.6rem; }
+    .slide h2 { font-size: 1.8rem; margin-bottom: 0.8rem; color: #dbeafe; }
+    .slide p, .slide li { font-size: 1.08rem; line-height: 1.8; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+    .card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 16px 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(99,102,241,0.2);
+      color: #c7d2fe;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+    .hero { font-size: 1.25rem; max-width: 900px; }
+    .footer { margin-top: 24px; color: #94a3b8; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <section class="slide">
+    <h1>🤖 LangChain 多模型應用</h1>
+    <p class="hero">這是一個整合 AI 對話、資料庫管理與英文學習的多功能 Web App，讓使用者可以在同一個介面中完成模型互動、資料查詢與單字管理。</p>
+    <div class="grid">
+      <div class="card">
+        <h2>核心目標</h2>
+        <ul>
+          <li>支援多模型 AI 對話</li>
+          <li>提供資料庫管理與查詢</li>
+          <li>輔助英文學習與單字複習</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>支援平台</h2>
+        <div>
+          <span class="tag">Ollama</span><span class="tag">OpenAI</span><span class="tag">Google Gemini</span>
+        </div>
+        <div>
+          <span class="tag">SQLite</span><span class="tag">MySQL</span><span class="tag">PostgreSQL</span>
+          <span class="tag">MariaDB</span><span class="tag">Redis</span><span class="tag">MongoDB</span>
+        </div>
+      </div>
+    </div>
+    <div class="footer">由 LangChain + Streamlit 構建，支援本機記憶與資料持久化</div>
+  </section>
+
+  <section class="slide">
+    <h2>💬 AI 對話功能</h2>
+    <div class="grid">
+      <div class="card">
+        <ul>
+          <li>可在側邊欄切換模型提供者</li>
+          <li>可調整溫度參數，控制輸出風格</li>
+          <li>保留對話歷史，方便後續回顧</li>
+          <li>支援清除歷史與重新開始新對話</li>
+        </ul>
+      </div>
+      <div class="card">
+        <ul>
+          <li>支援自然語言提問</li>
+          <li>可直接串接不同 LLM 服務</li>
+          <li>適合做問答、翻譯、摘要與日常助理</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <h2>🗄️ 資料庫管理功能</h2>
+    <div class="grid">
+      <div class="card">
+        <ul>
+          <li>支援 SQLite、MySQL、PostgreSQL、MariaDB、Redis、MongoDB</li>
+          <li>可輸入連線設定並進行測試連線</li>
+          <li>自動分析資料表結構、欄位與關聯</li>
+          <li>可預覽表格內容與資料行數</li>
+        </ul>
+      </div>
+      <div class="card">
+        <ul>
+          <li>支援 SQL 查詢執行</li>
+          <li>支援資料列 CRUD 操作</li>
+          <li>支援單筆刪除與批次編輯</li>
+          <li>提供更漂亮的資料表編輯介面與 CSV 下載</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <h2>📘 英文學習功能</h2>
+    <div class="grid">
+      <div class="card">
+        <ul>
+          <li>可新增英文單字與中文翻譯</li>
+          <li>可附加例句並儲存到本機資料庫</li>
+          <li>支援依照分類管理單字</li>
+          <li>可在分類單字清單中查看例句與刪除單筆資料</li>
+        </ul>
+      </div>
+      <div class="card">
+        <ul>
+          <li>提供單字卡片複習模式</li>
+          <li>支援收藏與今日複習紀錄</li>
+          <li>提供 TOEFL 風格測驗與學習成效統計</li>
+          <li>可追蹤最近準確率與每日趨勢</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <h2>🔍 字典式查詢與例句生成</h2>
+    <div class="grid">
+      <div class="card">
+        <ul>
+          <li>先查詢本機已儲存的翻譯資料</li>
+          <li>若沒有找到，才會請模型生成翻譯內容</li>
+          <li>查詢結果可直接填入儲存欄位</li>
+          <li>支援新增與合併多個例句</li>
+        </ul>
+      </div>
+      <div class="card">
+        <ul>
+          <li>支援生成多個例句並追加到原有例句</li>
+          <li>儲存時會把完整例句群一起寫入資料庫</li>
+          <li>後續查詢與顯示時可完整呈現</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <h2>🚀 開始使用方式</h2>
+    <div class="card">
+      <ol>
+        <li>啟動虛擬環境並安裝相依套件</li>
+        <li>執行主程式：python main.py</li>
+        <li>選擇 AI 對話、資料庫管理或英文學習頁籤</li>
+        <li>依需求設定模型、連線與學習資料</li>
+      </ol>
+    </div>
+    <div class="footer">更多說明請參閱 README.md</div>
+  </section>
+</body>
+</html>
