@@ -319,30 +319,14 @@ def render_sidebar():
     )
     st.session_state.provider = provider_options[selected_provider_name]
 
-    # 1. 取得當前供應商可用的模型列表
     available_models = LLMFactory.get_available_models(st.session_state.provider)
-
-    # 2. 【核心安全檢查】如果當前 model 不在可用列表中，主動將其修正為列表的第一個預設值
-    if st.session_state.model not in available_models:
-        # 確保列表不為空，避免 pop() 或 index 0 報錯
-        st.session_state.model = available_models[0] if available_models else ""
-
-    # 3. 渲染選單（此時 index 必定能安全對應）
     selected_model = st.selectbox(
         "選擇 AI 模型",
         options=available_models,
-        index=available_models.index(st.session_state.model) if available_models else 0,
+        index=available_models.index(st.session_state.model) if st.session_state.model in available_models else 0,
         format_func=LLMFactory.get_formatted_model_name
     )
-
-    # 4. 同步更新狀態
     st.session_state.model = selected_model
-
-    print("debug", selected_model)
-    print("debug", st.session_state.model)
-    print("debug", available_models)
-    print("debug", available_models.index(st.session_state.model))
-    print("debug", LLMFactory.get_formatted_model_name)
 
     st.session_state.temperature = st.slider(
         t("temperature_label"),
@@ -400,7 +384,7 @@ def render_sidebar():
         st.write(f"**{t('connection_status')}**: {status}")
         st.write(f"**{t('connection_message')}**: {st.session_state.db_test_result.get('message')}")
 
-    if st.button(f"🗑️ {t('clear_history')}", width=True):
+    if st.button(f"🗑️ {t('clear_history')}", use_container_width=True):
         st.session_state.messages = []
         st.session_state.user_input = ""
         st.session_state.generated_sql = ""
@@ -435,7 +419,7 @@ def render_chat_tab():
             key="user_input_input",
         )
     with col2:
-        submit_button = st.button(t("submit"), width=True)
+        submit_button = st.button(t("submit"), use_container_width=True)
 
     if submit_button and st.session_state.user_input:
         user_message = st.session_state.user_input
@@ -806,7 +790,7 @@ def render_english_learning_tab():
             step=1
         )
         
-    if st.button("⚡ 開始生成並自動匯入", width=True):
+    if st.button("⚡ 開始生成並自動匯入", use_container_width=True):
         with st.spinner("AI 正在為您量身打造字彙庫並寫入資料庫中..."):
             try:
                 llm = LLMFactory.get_llm(
@@ -1256,7 +1240,7 @@ def render_english_learning_tab():
         st.bar_chart({"每日題數": [row["total"] for row in trend_rows]})
         st.dataframe(
             [{"日期": row["date"], "答對": row["score"], "總題數": row["total"], "準確率": f"{row['accuracy'] * 100:.0f}%"} for row in trend_rows],
-            width=True,
+            use_container_width=True,
         )
     else:
         st.info("目前還沒有測驗成效紀錄，先做一次測驗即可看到趨勢圖表。")
@@ -1361,7 +1345,7 @@ def render_db_tab():
             value=st.session_state.db_config.get("database", ""),
         )
 
-    if st.button(t("test_connection"), width=True):
+    if st.button(t("test_connection"), use_container_width=True):
         ok, message, analysis = test_db_connection(
             st.session_state.db_type,
             st.session_state.db_config,
@@ -1392,7 +1376,7 @@ def render_db_tab():
                     t("columns_label"): ", ".join([f"{c.get('name')}({c.get('type')})" for c in columns]),
                     t("relationship_count_label"): len(table.get("relationships") or []),
                 })
-            st.dataframe(table_summary, width=True)
+            st.dataframe(table_summary, use_container_width=True)
 
             for table in st.session_state.db_analysis.get("tables", []):
                 with st.expander(f"📄 {table.get('name')}"):
@@ -1419,7 +1403,7 @@ def render_db_tab():
                         if preview.get("ok"):
                             records = [dict(zip(preview["columns"], row)) for row in preview["rows"]]
                             st.caption(f"內容預覽（最多 {st.session_state.table_page_size} 筆）")
-                            st.dataframe(records, width=True)
+                            st.dataframe(records, use_container_width=True)
                         else:
                             st.warning(preview.get("error", "無法預覽內容"))
                     except Exception as exc:
@@ -1441,7 +1425,7 @@ def render_db_tab():
         st.markdown("---")
         st.subheader(t("basic_operations"))
 
-        if st.button("🔄 重載資料表結構", width=True):
+        if st.button("🔄 重載資料表結構", use_container_width=True):
             st.session_state.db_test_result = None
             st.session_state.db_analysis = {}
             st.session_state.selected_table = ""
@@ -1462,7 +1446,7 @@ def render_db_tab():
             with preview_col:
                 # 解決按鈕與有標籤的 selectbox 垂直跑版對齊問題
                 st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
-                if st.button(t("preview"), width=True):
+                if st.button(t("preview"), use_container_width=True):
                     try:
                         st.session_state.query_result = get_table_preview(
                             st.session_state.db_type,
@@ -1484,7 +1468,7 @@ def render_db_tab():
         with col_refresh:
             # 解決按鈕與有標籤的 number_input 垂直跑版對齊問題
             st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("🔄 重新載入", width=True):
+            if st.button("🔄 重新載入", use_container_width=True):
                 st.rerun()
 
         st.session_state.query_sql = st.text_area(
@@ -1493,7 +1477,7 @@ def render_db_tab():
             height=140,
             placeholder=t("sql_placeholder"),
         )
-        if st.button(t("run_sql"), width=True):
+        if st.button(t("run_sql"), use_container_width=True):
             if not st.session_state.query_sql.strip():
                 st.warning(t("sql_query_required"))
             else:
@@ -1530,7 +1514,7 @@ def render_db_tab():
                         st.markdown("<div style='border:1px solid #e5e7eb;border-radius:14px;padding:1rem;background:linear-gradient(135deg,#f9fafb 0%, #eef2ff 100%);'>", unsafe_allow_html=True)
                         edited_df = st.data_editor(
                             editable_df,
-                            width=True,
+                            use_container_width=True,
                             hide_index=True,
                             key=f"table_editor_{st.session_state.selected_table}",
                         )
@@ -1541,7 +1525,7 @@ def render_db_tab():
                         delete_row_options = [f"{idx + 1}. {', '.join(str(row.get(col, '')) for col in result['columns'][:3])}" for idx, row in enumerate(records)]
                         selected_delete_index = st.selectbox("刪除資料列", options=list(range(len(delete_row_options))), format_func=lambda idx: delete_row_options[idx], key="table_delete_row")
                     with delete_action_col:
-                        if st.button("🗑️ 刪除單筆", width=True):
+                        if st.button("🗑️ 刪除單筆", use_container_width=True):
                             try:
                                 target_row = records[selected_delete_index]
                                 target_value = target_row.get(pk_column)
@@ -1559,7 +1543,7 @@ def render_db_tab():
                                 st.rerun()
                             except Exception as exc:
                                 st.error(f"刪除失敗：{exc}")
-                    if st.button("💾 保存編輯結果", width=True):
+                    if st.button("💾 保存編輯結果", use_container_width=True):
                         try:
                             if hasattr(edited_df, "to_dict"):
                                 for row in edited_df.to_dict(orient="records"):
@@ -1624,7 +1608,7 @@ def render_db_tab():
                         value=st.session_state.crud_values.get(column, ""),
                         key=f"insert_{column}",
                     )
-                if st.button(t("crud_insert_button"), width=True):
+                if st.button(t("crud_insert_button"), use_container_width=True):
                     try:
                         payload = {k: v for k, v in st.session_state.crud_values.items() if v != ""}
                         result = insert_row(st.session_state.db_type, st.session_state.db_config, st.session_state.selected_table, payload)
@@ -1640,7 +1624,7 @@ def render_db_tab():
                         key=f"update_{column}",
                     )
                 st.session_state.crud_where_values = st.text_input("條件參數（以逗號分隔）", value=st.session_state.crud_where_values)
-                if st.button(t("crud_update_button"), width=True):
+                if st.button(t("crud_update_button"), use_container_width=True):
                     try:
                         values = {k: v for k, v in st.session_state.crud_values.items() if v != ""}
                         where_values = [item.strip() for item in st.session_state.crud_where_values.split(",") if item.strip()]
@@ -1651,7 +1635,7 @@ def render_db_tab():
             else:
                 st.session_state.crud_where = st.text_input(t("delete_condition_label"), value=st.session_state.crud_where)
                 st.session_state.crud_where_values = st.text_input("條件參數（以逗號分隔）", value=st.session_state.crud_where_values)
-                if st.button(t("crud_delete_button"), width=True):
+                if st.button(t("crud_delete_button"), use_container_width=True):
                     try:
                         where_values = [item.strip() for item in st.session_state.crud_where_values.split(",") if item.strip()]
                         result = delete_row(st.session_state.db_type, st.session_state.db_config, st.session_state.selected_table, st.session_state.crud_where, where_values)
@@ -1674,7 +1658,7 @@ def render_db_tab():
             value=st.session_state.sql_description,
             height=120,
         )
-        if st.button(t("generate_sql"), width=True):
+        if st.button(t("generate_sql"), use_container_width=True):
             if not st.session_state.sql_description.strip():
                 st.session_state.sql_feedback = {"type": "warning", "message": t("sql_description_required")}
             elif not st.session_state.db_analysis:
