@@ -35,6 +35,25 @@ def select_provider():
     
     return provider_map[choice]
 
+def select_model(provider):
+    """讓使用者選擇具體模型"""
+    models = LLMFactory.get_available_models(provider)
+    if not models:
+        return None
+    print(f"\n📋 請選擇 {provider.value.upper()} 模型:")
+    for idx, model in enumerate(models, 1):
+        formatted = LLMFactory.get_formatted_model_name(model)
+        print(f"  {idx}. {formatted}")
+    
+    choice = input(f"\n請輸入選擇 (1-{len(models)}, 預設 1): ").strip()
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(models):
+            return models[idx]
+    except ValueError:
+        pass
+    return models[0]
+
 def get_prompt():
     """獲取使用者的提示詞"""
     print("\n📝 請輸入您的提示詞 (輸入 'quit' 結束):")
@@ -46,18 +65,19 @@ def get_prompt():
     except EOFError:
         return "quit"
 
-def invoke_llm(provider, prompt):
+def invoke_llm(provider, model_name, prompt):
     """呼叫 LLM 獲取回應"""
     try:
         print("\n⏳ 正在獲取回應...")
-        llm = LLMFactory.get_llm(provider)
+        llm = LLMFactory.get_llm(provider, model_name=model_name)
         messages = [HumanMessage(content=prompt)]
-        response = llm.invoke(messages)
         
-        print("\n✅ 回應完成:")
+        print("\n✅ 回應內容:")
         print("-" * 60)
-        print(response.content)
-        print("-" * 60)
+        # 實作串流輸出 (Streaming)
+        for chunk in llm.stream(messages):
+            print(chunk.content, end="", flush=True)
+        print("\n" + "-" * 60)
         return True
     except Exception as e:
         print(f"\n❌ 發生錯誤: {e}")
@@ -70,9 +90,11 @@ def main():
     
     # 選擇提供者
     provider = select_provider()
-    print(f"\n✓ 已選擇: {provider.value.upper()}")
+    print(f"\n✓ 已選擇提供者: {provider.value.upper()}")
     
-    print("✓ 模型將直接從 .env 的對應 _MODEL 設定讀取")
+    # 選擇模型
+    model_name = select_model(provider)
+    print(f"✓ 已選擇模型: {model_name}")
     
     # 交互式循環
     print("\n" + "=" * 60)
@@ -90,7 +112,7 @@ def main():
             print("\n👋 感謝使用 LangChain CLI 應用!")
             break
         
-        invoke_llm(provider, prompt)
+        invoke_llm(provider, model_name, prompt)
         
         # 詢問是否繼續
         again = input("\n繼續提問? (是/否): ").strip().lower()
