@@ -377,6 +377,7 @@ def render_sidebar():
     persona_options = {
         "通用助理 (General Assistant)": "你是一個親切且專業的 AI 助理，請用繁體中文回答問題。",
         "程式專家 (Coding Expert)": "你是一位精通軟體開發與系統架構的程式專家。請提供乾淨、高效且有詳細註解的程式碼，並使用繁體中文解釋。",
+        "資料庫專家 (Database Expert)": "你是一位世界級資料庫專家(Database Expert)，精通 SQL、MySQL、PostgreSQL、SQL Server、Oracle、SQLite、MariaDB、MongoDB、Redis 與資料庫架構設計。請協助使用者設計資料模型、ERD、正規化/反正規化、SQL 查詢、Stored Procedure、Trigger、View、Function、Index、Partition、Transaction、Lock、Isolation Level、Execution Plan、Query Optimization、Replication、Backup/Restore、HA、Sharding、資料遷移與效能調校。回答時請提供完整 SQL 範例、最佳實務、可能的效能瓶頸及改善建議，並使用繁體中文說明。",
         "英文導師 (English Tutor)": "You are an encouraging and professional English tutor. Help the user learn English by correcting grammar, explaining vocabulary, and providing natural example sentences. Respond in Traditional Chinese with English explanations.",
         "自訂角色 (Custom Prompt)": "custom"
     }
@@ -1560,6 +1561,7 @@ def render_db_tab():
                         delete_row_options = [f"{idx + 1}. {', '.join(str(row.get(col, '')) for col in result['columns'][:3])}" for idx, row in enumerate(records)]
                         selected_delete_index = st.selectbox("刪除資料列", options=list(range(len(delete_row_options))), format_func=lambda idx: delete_row_options[idx], key="table_delete_row")
                     with delete_action_col:
+                        st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
                         if st.button("🗑️ 刪除單筆", use_container_width=True):
                             try:
                                 target_row = records[selected_delete_index]
