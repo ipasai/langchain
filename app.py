@@ -303,31 +303,66 @@ def initialize_session_state():
     if "db_source_signature" not in st.session_state:
         st.session_state.db_source_signature = None
 
+def handle_provider_change():
+    """當模型提供者切換時，自動將 model 設為新提供者的預設值，避免狀態不一致導致跳回"""
+    new_provider = st.session_state.temp_provider
+    st.session_state.provider = new_provider
+    
+    # 取得新供應商的可選清單
+    new_models = LLMFactory.get_available_models(new_provider)
+    
+    # 優先過濾掉含有 'embed' 關鍵字的向量模型，選取一般的對話模型
+    chat_models = [m for m in new_models if "embed" not in m.lower()]
+    
+    # 更新 session_state 中的 model
+    if chat_models:
+        st.session_state.model = chat_models[0]
+    elif new_models:
+        st.session_state.model = new_models[0]
+    else:
+        st.session_state.model = ""
 
 def render_sidebar():
     st.header(f"⚙️ {t('app_settings')}")
-
+    
     provider_options = {
         t("provider_ollama"): ModelProvider.OLLAMA,
         t("provider_openai"): ModelProvider.OPENAI,
         t("provider_google"): ModelProvider.GOOGLE,
     }
+    
+    # 1. 提供者選單 (使用 on_change 機制，防止跨供應商切換時，模型狀態卡死)
     selected_provider_name = st.selectbox(
         t("provider_label"),
         options=list(provider_options.keys()),
         index=list(provider_options.values()).index(st.session_state.provider),
+        key="temp_provider",
+        on_change=handle_provider_change
     )
-    st.session_state.provider = provider_options[selected_provider_name]
-
+    
+    # 2. 取得當前供應商的所有可用模型（建議 LLMFactory.get_available_models 內部要有 cache 或是穩定排序）
     available_models = LLMFactory.get_available_models(st.session_state.provider)
-    selected_model = st.selectbox(
+    
+    # 這裡對 available_models 做一個『強制排序』，確保每次 Rerun 時 options 的順序絕對一致！
+    # 這是解決「選單亂跳」的關鍵！
+    available_models = sorted(available_models)
+    
+    # 3. 確保當前的 model 必須在 available_models 裡面
+    if st.session_state.model not in available_models and available_models:
+        # 優先選擇對話模型而非 embedding
+        chat_models = [m for m in available_models if "embed" not in m.lower()]
+        st.session_state.model = chat_models[0] if chat_models else available_models[0]
+        
+    # 4. 渲染模型選單：使用 key 直接雙向綁定 "model"
+    # 移除手動計算 index，直接利用 key="model" 將狀態存放在 st.session_state.model 中
+    st.selectbox(
         "選擇 AI 模型",
         options=available_models,
-        index=available_models.index(st.session_state.model) if st.session_state.model in available_models else 0,
+        key="model",  # 關鍵：利用 Streamlit 核心狀態管理
         format_func=LLMFactory.get_formatted_model_name
     )
-    st.session_state.model = selected_model
-
+    
+    # 5. 溫度調整
     st.session_state.temperature = st.slider(
         t("temperature_label"),
         min_value=0.0,
