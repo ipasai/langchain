@@ -331,14 +331,46 @@ def render_sidebar():
         t("provider_google"): ModelProvider.GOOGLE,
     }
     
-    # 1. 提供者選單 (使用 on_change 機制，防止跨供應商切換時，模型狀態卡死)
+# 【安全檢查】確保 st.session_state.provider 的值存在於 provider_options 的 values 中
+    # 如果它變成字串 (例如 "Google Gemini (雲端)" 或 "Ollama (本地)")，則自動更正為正確的 Enum 物件
+    current_provider = st.session_state.get("provider")
+    
+    # 1. 如果 provider 是字串，嘗試轉換為 Enum
+    if isinstance(current_provider, str):
+        if current_provider in provider_options:  # 情況 A：它是中文標題
+            st.session_state.provider = provider_options[current_provider]
+        else:
+            # 情況 B：它是 Enum 的 string value (例如 "ollama" 或 "google")
+            try:
+                st.session_state.provider = ModelProvider(current_provider)
+            except ValueError:
+                st.session_state.provider = ModelProvider.OLLAMA  # 終極降級
+                
+    # 2. 如果根本不在可選的 values 內，安全降級為第一項
+    if st.session_state.provider not in provider_options.values():
+        st.session_state.provider = ModelProvider.OLLAMA
+
+    # 3. 計算安全的 index (此時保證絕對不會報錯)
+    provider_values = list(provider_options.values())
+    default_provider_index = provider_values.index(st.session_state.provider)
+    
+    # 4. 渲染選單 (使用 temp_provider 並綁定 on_change 處理模型重設)
     selected_provider_name = st.selectbox(
         t("provider_label"),
         options=list(provider_options.keys()),
-        index=list(provider_options.values()).index(st.session_state.provider),
+        index=default_provider_index,
         key="temp_provider",
         on_change=handle_provider_change
     )
+
+    # # 1. 提供者選單 (使用 on_change 機制，防止跨供應商切換時，模型狀態卡死)
+    # selected_provider_name = st.selectbox(
+    #     t("provider_label"),
+    #     options=list(provider_options.keys()),
+    #     index=list(provider_options.values()).index(st.session_state.provider),
+    #     key="temp_provider",
+    #     on_change=handle_provider_change
+    # )
     
     # 2. 取得當前供應商的所有可用模型（建議 LLMFactory.get_available_models 內部要有 cache 或是穩定排序）
     available_models = LLMFactory.get_available_models(st.session_state.provider)
