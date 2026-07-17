@@ -23,7 +23,22 @@
 ### 安裝
 
 ```bash
+### 建立虛擬環境在專案目錄下執行
+python -m venv .venv
+
+### 啟用虛擬環境
+### Windows (Command Prompt)
+.venv\Scripts\activate.bat
+
+### Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+
+### macOS / Linux
 source .venv/bin/activate
+
+### 啟用後，終端機提示字元前方會顯示 (.venv)，代表目前已處於隔離環境
+
+### 安裝套件
 pip install -r requirements.txt
 ```
 
@@ -162,7 +177,17 @@ def get_custom_llm(model_name: str = None, temperature: float = 0.7):
 **快速命令參考**
 
 ```bash
-# 激活虛擬環境
+# 建立虛擬環境在專案目錄下執行
+python -m venv .venv
+
+# 啟用虛擬環境
+# Windows (Command Prompt)
+.venv\Scripts\activate.bat
+
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+
+# macOS / Linux
 source .venv/bin/activate
 
 # 安裝依賴
