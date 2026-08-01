@@ -18,6 +18,7 @@ try:
     from sidebar import Sidebar
     from chat import ChatPage
     from db import DatabasePage
+    from doc_analyzer import DocAnalyzerPage
     from english_learning import (
         EnglishLearningPage,
         get_flashcard_display_content,
@@ -144,6 +145,20 @@ def initialize_session_state():
         st.session_state.favorite_cards = []
     if "db_source_signature" not in st.session_state:
         st.session_state.db_source_signature = None
+    # ── 全域處理中旗標（防止按鈕重複點擊）────────────────────────
+    if "is_processing" not in st.session_state:
+        st.session_state.is_processing = False
+    # ── 智慧文件分析模組 ─────────────────────────────────────────
+    if "doc_text" not in st.session_state:
+        st.session_state.doc_text = ""
+    if "doc_filename" not in st.session_state:
+        st.session_state.doc_filename = ""
+    if "doc_id" not in st.session_state:
+        st.session_state.doc_id = None
+    if "doc_rag_answer" not in st.session_state:
+        st.session_state.doc_rag_answer = ""
+    if "doc_rag_question" not in st.session_state:
+        st.session_state.doc_rag_question = ""
 
 
 def main():
@@ -167,7 +182,9 @@ def main():
         sidebar = Sidebar()
         sidebar.render()
 
-    tab_chat, tab_db, tab_english = st.tabs([t("chat_tab_title"), t("db_management"), t("english_learning_tab")])
+    tab_chat, tab_db, tab_english, tab_doc = st.tabs([
+        t("chat_tab_title"), t("db_management"), t("english_learning_tab"), "📄 智慧文件分析"
+    ])
     with tab_chat:
         chat_page = ChatPage()
         chat_page.render()
@@ -177,6 +194,9 @@ def main():
     with tab_english:
         english_page = EnglishLearningPage()
         english_page.render()
+    with tab_doc:
+        doc_page = DocAnalyzerPage()
+        doc_page.render()
 
 
 if __name__ == "__main__":

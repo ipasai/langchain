@@ -54,6 +54,85 @@ def ensure_local_memory_database(db_path: Optional[str] = None) -> str:
         cursor.execute(
             "CREATE TABLE IF NOT EXISTS daily_review_state (id INTEGER PRIMARY KEY AUTOINCREMENT, review_date TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL)"
         )
+        # ── RAG 知識庫文件索引表 ───────────────────────────────────
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS rag_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT NOT NULL,
+                file_type TEXT NOT NULL,
+                content_hash TEXT NOT NULL UNIQUE,
+                chunk_count INTEGER NOT NULL DEFAULT 0,
+                doc_type TEXT NOT NULL DEFAULT 'knowledge',
+                summary TEXT,
+                mindmap_json TEXT,
+                created_at TEXT NOT NULL
+            )"""
+        )
+        # ── RAG 問答紀錄 / 知識強化表 ─────────────────────────────
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS rag_knowledge (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doc_id INTEGER,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                source_chunks TEXT,
+                created_at TEXT NOT NULL
+            )"""
+        )
+        # ── 考題測驗計分紀錄 ──────────────────────────────────────
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS quiz_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doc_id INTEGER,
+                filename TEXT,
+                total_questions INTEGER NOT NULL,
+                correct_count INTEGER NOT NULL,
+                score REAL NOT NULL,
+                answers_json TEXT,
+                created_at TEXT NOT NULL
+            )"""
+        )
+        # ── 考題題庫（每道題一列）─────────────────────────────────
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS quiz_bank (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                set_name TEXT NOT NULL,
+                doc_id INTEGER,
+                filename TEXT NOT NULL,
+                question TEXT NOT NULL,
+                options_json TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                explanation TEXT,
+                created_at TEXT NOT NULL
+            )"""
+        )
+        # ── 文件單元切割與教學紀錄 ────────────────────────────────
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS doc_units (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doc_id INTEGER NOT NULL,
+                filename TEXT NOT NULL,
+                unit_index INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                teaching TEXT,
+                quiz_json TEXT,
+                created_at TEXT NOT NULL
+            )"""
+        )
+        # ── 單元測試成績紀錄 ──────────────────────────────────────
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS unit_quiz_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                unit_id INTEGER,
+                doc_id INTEGER,
+                unit_title TEXT,
+                total INTEGER NOT NULL,
+                correct INTEGER NOT NULL,
+                score REAL NOT NULL,
+                created_at TEXT NOT NULL
+            )"""
+        )
         connection.commit()
     finally:
         connection.close()
@@ -778,6 +857,450 @@ def _fetch_table_columns(cursor: Any, db_type: DBType, table_name: str, current_
         return [{"name": row[0], "type": row[1]} for row in cursor.fetchall()]
 
     return []
+
+
+
+# ════════════════════════════════════════════════════════════
+# RAG 文件索引 CRUD
+# ════════════════════════════════════════════════════════════
+
+def save_rag_document(
+    filename: str,
+    file_type: str,
+    content_hash: str,
+    chunk_count: int,
+    doc_type: str = "knowledge",
+    summary: str = "",
+    mindmap_json: str = "",
+    db_path: Optional[str] = None,
+) -> int:
+    """儲存 RAG 文件索引，回傳 doc_id。若已存在（hash 相同）則更新。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        now = datetime.utcnow().isoformat()
+        existing = connection.execute(
+            "SELECT id FROM rag_documents WHERE content_hash = ?", (content_hash,)
+        ).fetchone()
+        if existing:
+            connection.execute(
+                "UPDATE rag_documents SET chunk_count=?, summary=?, mindmap_json=?, created_at=? WHERE id=?",
+                (chunk_count, summary, mindmap_json, now, existing[0]),
+            )
+            connection.commit()
+            return existing[0]
+        cursor = connection.execute(
+            "INSERT INTO rag_documents (filename, file_type, content_hash, chunk_count, doc_type, summary, mindmap_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (filename, file_type, content_hash, chunk_count, doc_type, summary, mindmap_json, now),
+        )
+        connection.commit()
+        return cursor.lastrowid
+    finally:
+        connection.close()
+
+
+def list_rag_documents(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """列出所有 RAG 文件索引。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT id, filename, file_type, doc_type, chunk_count, summary, mindmap_json, created_at "
+            "FROM rag_documents ORDER BY id DESC"
+        ).fetchall()
+        return [
+            {
+                "id": r[0], "filename": r[1], "file_type": r[2],
+                "doc_type": r[3], "chunk_count": r[4],
+                "summary": r[5] or "", "mindmap_json": r[6] or "",
+                "created_at": r[7],
+            }
+            for r in rows
+        ]
+    finally:
+        connection.close()
+
+
+def delete_rag_document(doc_id: int, db_path: Optional[str] = None) -> None:
+    """刪除 RAG 文件索引及相關紀錄。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("DELETE FROM rag_documents WHERE id = ?", (doc_id,))
+        connection.execute("DELETE FROM rag_knowledge WHERE doc_id = ?", (doc_id,))
+        connection.execute("DELETE FROM quiz_records WHERE doc_id = ?", (doc_id,))
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def save_rag_knowledge(
+    question: str,
+    answer: str,
+    source_chunks: str = "",
+    doc_id: Optional[int] = None,
+    db_path: Optional[str] = None,
+) -> None:
+    """儲存 RAG 問答紀錄以強化知識庫。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO rag_knowledge (doc_id, question, answer, source_chunks, created_at) VALUES (?, ?, ?, ?, ?)",
+            (doc_id, question, answer, source_chunks, datetime.utcnow().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def list_rag_knowledge(limit: int = 50, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """列出最近的 RAG 問答紀錄。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT id, doc_id, question, answer, source_chunks, created_at "
+            "FROM rag_knowledge ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [
+            {"id": r[0], "doc_id": r[1], "question": r[2], "answer": r[3],
+             "source_chunks": r[4] or "", "created_at": r[5]}
+            for r in rows
+        ]
+    finally:
+        connection.close()
+
+
+def save_quiz_record(
+    total_questions: int,
+    correct_count: int,
+    answers_json: str = "",
+    doc_id: Optional[int] = None,
+    filename: str = "",
+    db_path: Optional[str] = None,
+) -> None:
+    """儲存考題測驗結果。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        score = round(correct_count / total_questions * 100, 1) if total_questions else 0.0
+        connection.execute(
+            "INSERT INTO quiz_records (doc_id, filename, total_questions, correct_count, score, answers_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (doc_id, filename, total_questions, correct_count, score, answers_json, datetime.utcnow().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def list_quiz_records(limit: int = 20, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """列出最近的考題測驗紀錄。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT id, doc_id, filename, total_questions, correct_count, score, created_at "
+            "FROM quiz_records ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [
+            {"id": r[0], "doc_id": r[1], "filename": r[2], "total_questions": r[3],
+             "correct_count": r[4], "score": r[5], "created_at": r[6]}
+            for r in rows
+        ]
+    finally:
+        connection.close()
+
+
+# ════════════════════════════════════════════════════════════
+# 考題題庫 CRUD
+# ════════════════════════════════════════════════════════════
+
+def save_quiz_bank_questions(
+    set_name: str,
+    questions: List[Dict[str, Any]],
+    filename: str = "",
+    doc_id: Optional[int] = None,
+    db_path: Optional[str] = None,
+) -> int:
+    """
+    將一組題目（list of dict）存入 quiz_bank。
+    每道題一列，set_name 作為該組題目的名稱。
+    回傳成功儲存的題目數量。
+    """
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        now = datetime.utcnow().isoformat()
+        count = 0
+        for q in questions:
+            question_text = q.get("question", "").strip()
+            options = q.get("options", [])
+            answer = q.get("answer", "A").strip().upper()
+            explanation = q.get("explanation", "").strip()
+            if not question_text:
+                continue
+            connection.execute(
+                "INSERT INTO quiz_bank "
+                "(set_name, doc_id, filename, question, options_json, answer, explanation, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    set_name.strip(),
+                    doc_id,
+                    filename.strip(),
+                    question_text,
+                    json.dumps(options, ensure_ascii=False),
+                    answer,
+                    explanation,
+                    now,
+                ),
+            )
+            count += 1
+        connection.commit()
+        return count
+    finally:
+        connection.close()
+
+
+def list_quiz_bank_sets(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """列出所有題庫組別（每組顯示名稱、題目數量、來源文件、建立時間）。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT set_name, filename, COUNT(*) as total, MIN(created_at) as created_at "
+            "FROM quiz_bank GROUP BY set_name ORDER BY created_at DESC"
+        ).fetchall()
+        return [
+            {"set_name": r[0], "filename": r[1], "total": r[2], "created_at": r[3]}
+            for r in rows
+        ]
+    finally:
+        connection.close()
+
+
+def list_quiz_bank_questions(
+    set_name: Optional[str] = None,
+    limit: int = 200,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    列出題庫題目。
+    若指定 set_name，只回傳該組；否則回傳全部。
+    """
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        if set_name:
+            rows = connection.execute(
+                "SELECT id, set_name, filename, question, options_json, answer, explanation, created_at "
+                "FROM quiz_bank WHERE set_name = ? ORDER BY id ASC LIMIT ?",
+                (set_name, limit),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                "SELECT id, set_name, filename, question, options_json, answer, explanation, created_at "
+                "FROM quiz_bank ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        result = []
+        for r in rows:
+            try:
+                options = json.loads(r[4])
+            except Exception:
+                options = []
+            result.append({
+                "id": r[0], "set_name": r[1], "filename": r[2],
+                "question": r[3], "options": options,
+                "answer": r[5], "explanation": r[6], "created_at": r[7],
+            })
+        return result
+    finally:
+        connection.close()
+
+
+def delete_quiz_bank_set(set_name: str, db_path: Optional[str] = None) -> int:
+    """刪除指定組別的所有題目，回傳刪除數量。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        cursor = connection.execute(
+            "DELETE FROM quiz_bank WHERE set_name = ?", (set_name,)
+        )
+        connection.commit()
+        return cursor.rowcount
+    finally:
+        connection.close()
+
+
+def delete_quiz_bank_question(question_id: int, db_path: Optional[str] = None) -> None:
+    """刪除題庫中的單道題目。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("DELETE FROM quiz_bank WHERE id = ?", (question_id,))
+        connection.commit()
+    finally:
+        connection.close()
+
+
+# ════════════════════════════════════════════════════════════
+# 文件單元 CRUD
+# ════════════════════════════════════════════════════════════
+
+def save_doc_unit(
+    doc_id: int,
+    filename: str,
+    unit_index: int,
+    title: str,
+    content: str,
+    teaching: str = "",
+    quiz_json: str = "",
+    db_path: Optional[str] = None,
+) -> int:
+    """儲存單一文件單元，回傳 unit_id。若同 doc_id + unit_index 已存在則更新。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        now = datetime.utcnow().isoformat()
+        existing = connection.execute(
+            "SELECT id FROM doc_units WHERE doc_id=? AND unit_index=?",
+            (doc_id, unit_index),
+        ).fetchone()
+        if existing:
+            connection.execute(
+                "UPDATE doc_units SET title=?, content=?, teaching=?, quiz_json=?, created_at=? WHERE id=?",
+                (title, content, teaching, quiz_json, now, existing[0]),
+            )
+            connection.commit()
+            return existing[0]
+        cursor = connection.execute(
+            "INSERT INTO doc_units (doc_id, filename, unit_index, title, content, teaching, quiz_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (doc_id, filename, unit_index, title, content, teaching, quiz_json, now),
+        )
+        connection.commit()
+        return cursor.lastrowid
+    finally:
+        connection.close()
+
+
+def list_doc_units(doc_id: int, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """列出指定文件的所有單元，依 unit_index 排序。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT id, doc_id, filename, unit_index, title, content, teaching, quiz_json, created_at "
+            "FROM doc_units WHERE doc_id=? ORDER BY unit_index ASC",
+            (doc_id,),
+        ).fetchall()
+        result = []
+        for r in rows:
+            try:
+                quiz = json.loads(r[7]) if r[7] else []
+            except Exception:
+                quiz = []
+            result.append({
+                "id": r[0], "doc_id": r[1], "filename": r[2],
+                "unit_index": r[3], "title": r[4], "content": r[5],
+                "teaching": r[6] or "", "quiz": quiz, "created_at": r[8],
+            })
+        return result
+    finally:
+        connection.close()
+
+
+def update_doc_unit_teaching(unit_id: int, teaching: str, db_path: Optional[str] = None) -> None:
+    """更新單元教學內容。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "UPDATE doc_units SET teaching=? WHERE id=?",
+            (teaching, unit_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def update_doc_unit_quiz(unit_id: int, quiz_json: str, db_path: Optional[str] = None) -> None:
+    """更新單元測驗題目（JSON 字串）。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "UPDATE doc_units SET quiz_json=? WHERE id=?",
+            (quiz_json, unit_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def delete_doc_units(doc_id: int, db_path: Optional[str] = None) -> None:
+    """刪除指定文件的所有單元。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("DELETE FROM doc_units WHERE doc_id=?", (doc_id,))
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def save_unit_quiz_record(
+    unit_id: int,
+    doc_id: int,
+    unit_title: str,
+    total: int,
+    correct: int,
+    db_path: Optional[str] = None,
+) -> None:
+    """儲存單元測驗成績。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        score = round(correct / total * 100, 1) if total else 0.0
+        connection.execute(
+            "INSERT INTO unit_quiz_records (unit_id, doc_id, unit_title, total, correct, score, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (unit_id, doc_id, unit_title, total, correct, score, datetime.utcnow().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def list_unit_quiz_records(doc_id: Optional[int] = None, limit: int = 30, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """列出單元測驗成績，可依 doc_id 篩選。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        if doc_id is not None:
+            rows = connection.execute(
+                "SELECT id, unit_id, doc_id, unit_title, total, correct, score, created_at "
+                "FROM unit_quiz_records WHERE doc_id=? ORDER BY id DESC LIMIT ?",
+                (doc_id, limit),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                "SELECT id, unit_id, doc_id, unit_title, total, correct, score, created_at "
+                "FROM unit_quiz_records ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            {"id": r[0], "unit_id": r[1], "doc_id": r[2], "unit_title": r[3],
+             "total": r[4], "correct": r[5], "score": r[6], "created_at": r[7]}
+            for r in rows
+        ]
+    finally:
+        connection.close()
 
 
 def build_sql_generation_prompt(
