@@ -100,10 +100,21 @@ def load_recent_chat_messages(limit: int = 20, db_path: Optional[str] = None) ->
     connection = sqlite3.connect(db_path)
     try:
         rows = connection.execute(
-            "SELECT role, content, created_at FROM chat_messages ORDER BY id ASC LIMIT ?",
+            "SELECT id, role, content, created_at FROM chat_messages ORDER BY id ASC LIMIT ?",
             (limit,),
         ).fetchall()
-        return [{"role": row[0], "content": row[1], "created_at": row[2]} for row in rows]
+        return [{"id": row[0], "role": row[1], "content": row[2], "created_at": row[3]} for row in rows]
+    finally:
+        connection.close()
+
+
+def delete_chat_message(message_id: int, db_path: Optional[str] = None) -> None:
+    """刪除指定 id 的單筆對話紀錄。"""
+    db_path = ensure_local_memory_database(db_path)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("DELETE FROM chat_messages WHERE id = ?", (message_id,))
+        connection.commit()
     finally:
         connection.close()
 
@@ -288,7 +299,6 @@ def connect_database(db_type: DBType, config: Dict[str, Any]):
             database=config.get("database", ""),
             connect_timeout=10,
             charset=config.get("charset", "utf8mb4"),
-            cursorclass=pymysql.cursors.DictCursor,
         )
 
     if db_type == DBType.POSTGRES:

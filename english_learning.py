@@ -21,6 +21,50 @@ from db_utils import (
     should_show_daily_review_reminder,
 )
 
+# ── 共用樣式常數 ───────────────────────────────────────────────
+CARD_STYLE = (
+    "background:linear-gradient(135deg,#f8faff 0%,#eef2ff 100%);"
+    "border:1.5px solid #c7d2fe;"
+    "border-radius:16px;"
+    "padding:1.2rem 1.4rem;"
+    "margin-bottom:0.8rem;"
+    "box-shadow:0 4px 16px rgba(99,102,241,0.08);"
+)
+STAT_CARD_STYLE = (
+    "background:linear-gradient(135deg,#ffffff 0%,#f0fdf4 100%);"
+    "border:1.5px solid #bbf7d0;"
+    "border-radius:14px;"
+    "padding:1rem 1.2rem;"
+    "text-align:center;"
+    "box-shadow:0 2px 10px rgba(34,197,94,0.07);"
+)
+SECTION_HEADER_STYLE = (
+    "font-size:1.15rem;font-weight:700;color:#4f46e5;"
+    "margin-bottom:0.2rem;letter-spacing:0.01em;"
+)
+DIVIDER_HTML = "<hr style='border:none;border-top:1.5px solid #e0e7ff;margin:1.6rem 0;'/>"
+
+
+def _card(content_html: str, extra_style: str = "") -> None:
+    st.markdown(
+        f"<div style='{CARD_STYLE}{extra_style}'>{content_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _section_header(icon: str, title: str) -> None:
+    st.markdown(
+        f"<div style='{SECTION_HEADER_STYLE}'>{icon} {title}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _divider() -> None:
+    st.markdown(DIVIDER_HTML, unsafe_allow_html=True)
+
+
+# ── Helper functions（原有邏輯，完整保留）─────────────────────
+
 def _load_saved_categories(db_path):
     raw_value = load_setting("english_categories", "[]", db_path=db_path) or "[]"
     try:
@@ -46,13 +90,11 @@ def parse_llm_translation_response(response_text: str):
     lines = [line.strip() for line in response_text.splitlines() if line.strip()]
     translation = ""
     example = ""
-
     for line in lines:
         if line.lower().startswith("中文意思") or line.lower().startswith("意思"):
             translation = line.split("：", 1)[-1].strip() if "：" in line else line.split(":", 1)[-1].strip()
         elif line.lower().startswith("例句"):
             example = line.split("：", 1)[-1].strip() if "：" in line else line.split(":", 1)[-1].strip()
-
     if not translation and lines:
         translation = lines[0]
     if not example and lines and len(lines) > 1:
@@ -84,12 +126,12 @@ def parse_llm_example_items(response_text: str, fallback_translation: str = ""):
             english = raw_value
             chinese = fallback_translation
             if "｜" in raw_value:
-                parts = [part.strip() for part in raw_value.split("｜") if part.strip()]
+                parts = [p.strip() for p in raw_value.split("｜") if p.strip()]
                 if parts:
                     english = parts[0]
                     chinese = parts[1] if len(parts) > 1 else fallback_translation
             elif "|" in raw_value:
-                parts = [part.strip() for part in raw_value.split("|") if part.strip()]
+                parts = [p.strip() for p in raw_value.split("|") if p.strip()]
                 if parts:
                     english = parts[0]
                     chinese = parts[1] if len(parts) > 1 else fallback_translation
@@ -135,12 +177,12 @@ def parse_stored_examples(example_text: str):
         english = text
         chinese = ""
         if "｜" in text:
-            parts = [part.strip() for part in text.split("｜") if part.strip()]
+            parts = [p.strip() for p in text.split("｜") if p.strip()]
             if parts:
                 english = parts[0]
                 chinese = parts[1] if len(parts) > 1 else ""
         elif "|" in text:
-            parts = [part.strip() for part in text.split("|") if part.strip()]
+            parts = [p.strip() for p in text.split("|") if p.strip()]
             if parts:
                 english = parts[0]
                 chinese = parts[1] if len(parts) > 1 else ""
@@ -247,114 +289,130 @@ def build_quiz_question(practice_items):
         "answer": sample.get("translation", ""),
     }
 
+
 class EnglishLearningPage:
     def __init__(self):
         pass
 
     def render(self):
-        st.subheader(t("english_learning_title"))
-        st.caption(t("english_learning_desc"))
+        # ── 頁面標題 ────────────────────────────────────────────
+        st.markdown(
+            "<h2 style='color:#4f46e5;margin-bottom:0.2rem;'>📚 英文學習中心</h2>"
+            "<p style='color:#6b7280;font-size:0.95rem;margin-top:0;'>字典查詢・單字卡片・AI 生字集・測驗成效</p>",
+            unsafe_allow_html=True,
+        )
 
-        if "review_toast_shown" not in st.session_state:
-            st.session_state.review_toast_shown = False
-        if "flashcard_index" not in st.session_state:
-            st.session_state.flashcard_index = 0
-        if "flashcard_revealed" not in st.session_state:
-            st.session_state.flashcard_revealed = False
-        if "flashcard_display_mode" not in st.session_state:
-            st.session_state.flashcard_display_mode = "english"
-        if "selected_category" not in st.session_state:
-            st.session_state.selected_category = "未分類"
-        if "table_page_size" not in st.session_state:
-            st.session_state.table_page_size = 10
-        if "table_page" not in st.session_state:
-            st.session_state.table_page = 0
+        # ── Session state 初始化 ─────────────────────────────────
+        defaults = {
+            "review_toast_shown": False,
+            "flashcard_index": 0,
+            "flashcard_revealed": False,
+            "flashcard_display_mode": "english",
+            "selected_category": "未分類",
+            "table_page_size": 10,
+            "table_page": 0,
+            "translation_result": None,
+            "example_candidates": [],
+            "last_search_query": "",
+            "quiz_question": None,
+            "quiz_options": [],
+            "quiz_answer": None,
+            "quiz_result": None,
+            "quiz_submitted": False,
+        }
+        for key, val in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = val
 
+        # ── 統計資料 ─────────────────────────────────────────────
         stats = get_learning_stats(db_path=st.session_state.db_path)
         today = datetime.utcnow().date().isoformat()
         review_date = load_daily_review_state(db_path=st.session_state.db_path)
         show_review = should_show_daily_review_reminder(today=today, db_path=st.session_state.db_path)
 
         if show_review and not st.session_state.review_toast_shown:
-            st.toast("🔔 今日提醒：建議完成 5 分鐘複習，讓學習更穩定。", icon="🔔")
+            st.toast("🔔 今日提醒：建議完成 5 分鐘複習！", icon="🔔")
             st.session_state.review_toast_shown = True
 
+        # ── 統計卡片列 ───────────────────────────────────────────
+        c1, c2, c3, c4 = st.columns(4)
+        stat_items = [
+            (c1, "📖", "單字總數", str(stats["total_items"]), "#6366f1"),
+            (c2, "🎯", "測驗次數", str(stats["total_sessions"]), "#0ea5e9"),
+            (c3, "✅", "最近準確率", f"{stats['latest_accuracy'] * 100:.0f}%", "#10b981"),
+            (c4, "🔥", "累計答對", str(stats["total_score"]), "#f59e0b"),
+        ]
+        for col, icon, label, value, color in stat_items:
+            with col:
+                st.markdown(
+                    f"<div style='background:#fff;border:1.5px solid #e0e7ff;border-radius:14px;"
+                    f"padding:0.9rem 1rem;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.05);'>"
+                    f"<div style='font-size:1.5rem;'>{icon}</div>"
+                    f"<div style='font-size:1.6rem;font-weight:700;color:{color};line-height:1.2;'>{value}</div>"
+                    f"<div style='font-size:0.8rem;color:#6b7280;margin-top:0.15rem;'>{label}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown("<div style='margin-top:0.8rem;'></div>", unsafe_allow_html=True)
+
+        # ── 複習提醒 ─────────────────────────────────────────────
         if show_review:
-            st.warning("📅 今日還沒有完成複習，建議再看 5 個單字或做一次測驗。")
+            st.warning("📅 今日還未完成複習，建議再看 5 個單字或做一次測驗。")
         else:
             st.success(f"✅ 今日已完成複習，最後一次：{review_date}")
 
-        if st.button("🗓️ 標記今日複習完成"):
+        if st.button("🗓️ 標記今日複習完成", use_container_width=False):
             save_daily_review_state(today, db_path=st.session_state.db_path)
             st.session_state.review_toast_shown = False
-            st.success("已記錄今日複習")
+            st.success("已記錄今日複習 🎉")
             st.rerun()
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("單字數量", stats["total_items"])
-        with col2:
-            st.metric("測驗次次數", stats["total_sessions"])
-        with col3:
-            st.metric("最近準確率", f"{stats['latest_accuracy'] * 100:.0f}%")
+        _divider()
 
-        st.markdown("---")
-        st.subheader("🧠 AI 一鍵生成生字集 (AI Auto-Vocabulary)")
-        st.caption("選擇您想學習的主題與級別，由 AI 自動為您生成單字並匯入本機字庫，免去手動輸入！")
-        
-        col_gen_theme, col_gen_level, col_gen_count = st.columns([2, 1, 1])
-        with col_gen_theme:
+        # ════════════════════════════════════════════════════════
+        # 區塊 1：AI 一鍵生成生字集
+        # ════════════════════════════════════════════════════════
+        _section_header("⚡", "AI 一鍵生成生字集")
+        st.caption("選擇主題與難度，由 AI 自動生成單字並匯入字庫，免去手動輸入。")
+
+        col_theme, col_level, col_count = st.columns([2, 1, 1])
+        with col_theme:
             gen_theme = st.selectbox(
-                "選擇學習主題",
-                ["TOEFL 核心字彙", "IELTS 雅思字彙", "生活常用英文", "職場商務英文", "旅遊情境英文", "科技資訊英文"]
+                "學習主題",
+                ["TOEFL 核心字彙", "IELTS 雅思字彙", "生活常用英文", "職場商務英文", "旅遊情境英文", "科技資訊英文"],
+                label_visibility="collapsed",
             )
-        with col_gen_level:
+        with col_level:
             gen_level = st.selectbox(
-                "選擇字彙難度",
-                ["初級 (Basic)", "中級 (Intermediate)", "高級 (Advanced)"]
+                "字彙難度",
+                ["初級 (Basic)", "中級 (Intermediate)", "高級 (Advanced)"],
+                label_visibility="collapsed",
             )
-        with col_gen_count:
-            gen_count = st.number_input(
-                "生成數量",
-                min_value=3,
-                max_value=15,
-                value=5,
-                step=1
-            )
-            
-        if st.button("⚡ 開始生成並自動匯入", use_container_width=True):
-            with st.spinner("AI 正在為您量身打造字彙庫並寫入資料庫中..."):
+        with col_count:
+            gen_count = st.number_input("生成數量", min_value=3, max_value=15, value=5, step=1, label_visibility="collapsed")
+
+        if st.button("⚡ 開始生成並自動匯入", use_container_width=True, type="primary"):
+            with st.spinner("AI 正在量身打造字彙庫並寫入資料庫…"):
                 try:
                     llm = LLMFactory.get_llm(
                         st.session_state.provider,
                         model_name=st.session_state.model,
-                        temperature=0.7
+                        temperature=0.7,
                     )
-                    
-                    prompt = f"""請生成 {gen_count} 個適合 {gen_level} 程度的「{gen_theme}」英文單字或常用片語。
-請嚴格以下方的 JSON 陣列格式回傳，不可包含 any markdown 標記（如 ```json）或 any 額外的文字/引言。
-
-[
-  {{
-    "english": "單字或片語",
-    "translation": "中文意思說明",
-    "example": "英文例句 ｜ 中文翻譯"
-  }}
-]
-"""
+                    prompt = (
+                        f"請生成 {gen_count} 個適合 {gen_level} 程度的「{gen_theme}」英文單字或常用片語。\n"
+                        "請嚴格以下方 JSON 陣列格式回傳，不可包含任何 markdown 標記或額外文字。\n\n"
+                        '[\n  {"english":"單字","translation":"中文意思","example":"英文例句｜中文翻譯"}\n]'
+                    )
                     response = llm.invoke([HumanMessage(content=prompt)])
-                    
                     raw_json = response.content.strip()
                     if raw_json.startswith("```"):
                         lines = raw_json.splitlines()
-                        if lines[0].startswith("```"):
-                            lines = lines[1:]
-                        if lines[-1].startswith("```"):
-                            lines = lines[:-1]
+                        lines = lines[1:] if lines[0].startswith("```") else lines
+                        lines = lines[:-1] if lines[-1].startswith("```") else lines
                         raw_json = "\n".join(lines).strip()
-                        
                     vocab_list = json.loads(raw_json)
-                    
                     added_count = 0
                     imported_words = []
                     for item in vocab_list:
@@ -362,214 +420,267 @@ class EnglishLearningPage:
                         trans = item.get("translation", "").strip()
                         ex = item.get("example", "").strip()
                         if eng and trans:
-                            save_translation_entry(
-                                eng,
-                                trans,
-                                ex,
-                                category=gen_theme,
-                                db_path=st.session_state.db_path
-                            )
-                            imported_words.append(f"• **{eng}** ({trans})")
+                            save_translation_entry(eng, trans, ex, category=gen_theme, db_path=st.session_state.db_path)
+                            imported_words.append(f"<b>{eng}</b> — {trans}")
                             added_count += 1
-                    
                     if added_count > 0:
-                        st.success(f"✅ 成功自動匯入 {added_count} 個單字至「{gen_theme}」分類中！")
-                        st.markdown("\n".join(imported_words))
+                        st.success(f"✅ 成功匯入 {added_count} 個單字至「{gen_theme}」！")
+                        words_html = "".join(
+                            f"<span style='display:inline-block;background:#eef2ff;border-radius:8px;"
+                            f"padding:0.2rem 0.6rem;margin:0.2rem;font-size:0.88rem;'>{w}</span>"
+                            for w in imported_words
+                        )
+                        st.markdown(f"<div style='margin-top:0.5rem;'>{words_html}</div>", unsafe_allow_html=True)
                         st.session_state.saved_categories = _load_saved_categories(st.session_state.db_path)
                         st.session_state.selected_category = gen_theme
                         st.rerun()
                     else:
-                        st.error("產生的單字為空，請重試一次。")
+                        st.error("產生的單字為空，請重試。")
                 except Exception as e:
-                    st.error(f"❌ 生成失敗，錯誤原因: {e}")
-                    st.info("💡 提示：請確保您選擇的 AI 模型 (如 Google Gemini) 連線金鑰正常。")
+                    st.error(f"❌ 生成失敗：{e}")
+                    st.info("💡 請確認所選 AI 模型的 API 金鑰是否正常。")
 
-        st.markdown("---")
-        st.subheader("🃏 單字卡片模式")
+        _divider()
+
+        # ════════════════════════════════════════════════════════
+        # 區塊 2：單字卡片模式
+        # ════════════════════════════════════════════════════════
+        _section_header("🃏", "單字卡片複習")
+
         practice_items = list_english_practice_items(limit=100, db_path=st.session_state.db_path)
         if practice_items:
-            categories = sorted({item.get("category", "未分類") for item in practice_items})
-            if st.session_state.saved_categories:
-                categories = sorted(set(categories) | set(st.session_state.saved_categories))
+            self._render_flashcard_section(practice_items)
+        else:
+            st.info("目前沒有可複習的單字，先用 AI 生成或手動新增幾個吧。")
+
+        _divider()
+
+        # ════════════════════════════════════════════════════════
+        # 區塊 3：字典式查詢
+        # ════════════════════════════════════════════════════════
+        _section_header("📖", "字典式查詢")
+        self._render_dictionary_section()
+
+        _divider()
+
+        # ════════════════════════════════════════════════════════
+        # 區塊 4：TOEFL 風格測驗
+        # ════════════════════════════════════════════════════════
+        _section_header("🧪", "TOEFL 風格測驗")
+        self._render_quiz_section()
+
+        _divider()
+
+        # ════════════════════════════════════════════════════════
+        # 區塊 5：學習成效 & 趨勢
+        # ════════════════════════════════════════════════════════
+        _section_header("📊", "學習成效與趨勢")
+        self._render_stats_section()
+
+    # ── 單字卡片區塊 ────────────────────────────────────────────
+    def _render_flashcard_section(self, practice_items):
+        categories = sorted({item.get("category", "未分類") for item in practice_items})
+        if st.session_state.saved_categories:
+            categories = sorted(set(categories) | set(st.session_state.saved_categories))
+
+        col_cat, col_mode = st.columns([3, 2])
+        with col_cat:
             selected_category = st.selectbox(
                 "單字本分類",
                 options=categories,
-                index=max(0, categories.index(st.session_state.selected_category)) if st.session_state.selected_category in categories else 0,
+                index=max(0, categories.index(st.session_state.selected_category))
+                if st.session_state.selected_category in categories else 0,
+                key="flashcard_category_select",
             )
             st.session_state.selected_category = selected_category
-            filtered_items = [item for item in practice_items if item.get("category", "未分類") == selected_category]
-            if not filtered_items:
-                filtered_items = practice_items
 
-            index, revealed = normalize_flashcard_state(
-                filtered_items,
-                st.session_state.flashcard_index,
-                st.session_state.flashcard_revealed,
-            )
-            st.session_state.flashcard_index = index
-            st.session_state.flashcard_revealed = revealed
-            card = filtered_items[index]
-            total_cards = len(filtered_items)
-
+        with col_mode:
             display_mode_label = st.radio(
                 "顯示方向",
-                ["英文", "中文"],
+                ["英文→中文", "中文→英文"],
                 horizontal=True,
                 index=0 if st.session_state.flashcard_display_mode == "english" else 1,
                 key="flashcard_display_mode_radio",
             )
-            st.session_state.flashcard_display_mode = "english" if display_mode_label == "英文" else "chinese"
+            st.session_state.flashcard_display_mode = "english" if display_mode_label == "英文→中文" else "chinese"
 
-            if not st.session_state.flashcard_revealed:
-                display_content = card["english"] if st.session_state.flashcard_display_mode == "english" else card["translation"]
-                helper_text = "點擊顯示答案"
-            else:
-                display_content = card["translation"] if st.session_state.flashcard_display_mode == "english" else card["english"]
-                helper_text = "答案已顯示"
+        filtered_items = [i for i in practice_items if i.get("category", "未分類") == selected_category] or practice_items
 
-            col_mode, col_add = st.columns([2, 1])
-            with col_add:
-                if st.button("收藏到分類"):
-                    save_translation_entry(
-                        card["english"],
-                        card["translation"],
-                        card.get("example", ""),
-                        category=selected_category,
-                        db_path=st.session_state.db_path,
-                    )
-                    st.success(f"已收藏到 {selected_category}")
+        index, revealed = normalize_flashcard_state(
+            filtered_items,
+            st.session_state.flashcard_index,
+            st.session_state.flashcard_revealed,
+        )
+        st.session_state.flashcard_index = index
+        st.session_state.flashcard_revealed = revealed
+        card = filtered_items[index]
+        total_cards = len(filtered_items)
 
-            with st.expander("🗂️ 管理分類"):
-                new_category = st.text_input("新增分類名稱", value=st.session_state.new_category_name)
-                if st.button("新增分類") and new_category.strip():
-                    new_value = new_category.strip()
-                    categories = sorted(set(st.session_state.saved_categories + [new_value]))
-                    st.session_state.saved_categories = categories
-                    _save_saved_categories(categories, st.session_state.db_path)
-                    st.session_state.selected_category = new_value
-                    st.session_state.new_category_name = ""
-                    st.rerun()
-                if st.session_state.saved_categories:
-                    st.write("目前分類：" + "、".join(st.session_state.saved_categories))
+        if not revealed:
+            front = card["english"] if st.session_state.flashcard_display_mode == "english" else card["translation"]
+            badge_color, badge_text = "#6366f1", "點擊顯示答案 ↓"
+        else:
+            front = card["translation"] if st.session_state.flashcard_display_mode == "english" else card["english"]
+            badge_color, badge_text = "#10b981", "✓ 答案已顯示"
 
-            with st.expander("📚 目前分類單字清單"):
-                category_options = sorted(set([item.get("category", "未分類") for item in practice_items]) | set(st.session_state.saved_categories))
-                default_index = 0
-                if selected_category in category_options:
-                    default_index = category_options.index(selected_category)
-                list_category = st.selectbox(
-                    "查看分類",
-                    options=category_options,
-                    index=default_index,
-                    key="word_list_category",
-                )
-                category_items = [item for item in practice_items if item.get("category", "未分類") == list_category]
-                if category_items:
-                    for index, item in enumerate(category_items):
-                        col_item, col_delete = st.columns([8, 1])
-                        with col_item:
-                            example_text = item.get("example", "")
-                            if example_text:
-                                st.markdown(f"- **{item['english']}** → {item['translation']}  \n  例句：{example_text}")
-                            else:
-                                st.markdown(f"- **{item['english']}** → {item['translation']}")
-                        with col_delete:
-                            if st.button("🗑️", key=f"delete_word_{index}_{item['english']}"):
-                                delete_translation_entry(item["english"], db_path=st.session_state.db_path)
-                                st.success(f"已刪除 {item['english']}")
-                                st.rerun()
-                else:
-                    st.info("這個分類目前沒有單字")
+        # 卡片主體
+        st.markdown(
+            f"<div style='background:linear-gradient(135deg,#f8faff 0%,#e0e7ff 100%);"
+            f"border:2px solid #a5b4fc;border-radius:20px;padding:1.6rem 1.8rem;"
+            f"margin:0.6rem 0 0.8rem;box-shadow:0 8px 24px rgba(99,102,241,0.12);'>"
+            f"<div style='font-size:0.82rem;color:#818cf8;font-weight:600;letter-spacing:0.05em;'>"
+            f"卡片 {index + 1} / {total_cards} &nbsp;·&nbsp; {selected_category}</div>"
+            f"<div style='font-size:2rem;font-weight:800;color:#1e1b4b;margin:0.5rem 0 0.4rem;'>{front}</div>"
+            f"<span style='background:{badge_color};color:#fff;border-radius:20px;"
+            f"padding:0.2rem 0.8rem;font-size:0.78rem;font-weight:600;'>{badge_text}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
+        if card.get("example") and revealed:
             st.markdown(
-                f"<div style='border: 2px solid #4f46e5; border-radius: 18px; padding: 1.2rem; background: linear-gradient(135deg, #f8faff 0%, #eef2ff 100%); margin-bottom: 0.8rem; box-shadow: 0 6px 18px rgba(79,70,229,0.1);'>"
-                f"<div style='font-size: 0.9rem; color: #6366f1;'>卡片 {index + 1}/{total_cards} · {selected_category}</div>"
-                f"<div style='font-size: 1.8rem; font-weight: 700; margin-top: 0.5rem; color: #111827;'>{display_content}</div>"
-                f"<div style='margin-top: 0.8rem; color: #374151;'>{helper_text}</div></div>",
+                f"<div style='background:#f0fdf4;border-left:3px solid #34d399;border-radius:8px;"
+                f"padding:0.6rem 0.9rem;margin-bottom:0.7rem;font-size:0.88rem;color:#065f46;'>"
+                f"💬 <i>{card['example']}</i></div>",
                 unsafe_allow_html=True,
             )
 
-            if card.get("example") and st.session_state.flashcard_revealed:
-                st.caption(f"例句：{card['example']}")
+        # 操作按鈕列
+        btn_prev, btn_show, btn_next = st.columns([1, 2, 1])
+        with btn_prev:
+            if st.button("◀ 上一張", use_container_width=True):
+                st.session_state.flashcard_index = (index - 1) % total_cards
+                st.session_state.flashcard_revealed = False
+                st.rerun()
+        with btn_show:
+            if st.button("👁️ 顯示答案", use_container_width=True, type="primary"):
+                st.session_state.flashcard_revealed = True
+                st.rerun()
+        with btn_next:
+            if st.button("下一張 ▶", use_container_width=True):
+                st.session_state.flashcard_index = (index + 1) % total_cards
+                st.session_state.flashcard_revealed = False
+                st.rerun()
 
-            col_prev, col_show, col_next = st.columns([1, 2, 1])
-            with col_prev:
-                if st.button("◀ 上一張"):
-                    st.session_state.flashcard_index = (index - 1) % total_cards
+        if revealed:
+            r1, r2 = st.columns(2)
+            with r1:
+                if st.button("✅ 記得了", use_container_width=True):
+                    record_study_session("flashcard", 1, 1, db_path=st.session_state.db_path)
                     st.session_state.flashcard_revealed = False
-                    st.rerun()
-            with col_show:
-                if st.button("👁️ 顯示答案"):
-                    st.session_state.flashcard_revealed = True
-                    st.rerun()
-            with col_next:
-                if st.button("下一張 ▶"):
                     st.session_state.flashcard_index = (index + 1) % total_cards
+                    st.success("已記錄 ✓")
+                    st.rerun()
+            with r2:
+                if st.button("🔁 再複習", use_container_width=True):
+                    record_study_session("flashcard", 0, 1, db_path=st.session_state.db_path)
                     st.session_state.flashcard_revealed = False
+                    st.session_state.flashcard_index = (index + 1) % total_cards
+                    st.info("已標記需再複習")
                     st.rerun()
 
-            if st.session_state.flashcard_revealed:
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    if st.button("✅ 還記得"):
-                        record_study_session("flashcard", 1, 1, db_path=st.session_state.db_path)
-                        st.session_state.flashcard_revealed = False
-                        st.session_state.flashcard_index = (index + 1) % total_cards
-                        st.success("已記錄這張卡片的複習結果")
-                        st.rerun()
-                with btn_col2:
-                    if st.button("❌ 再複習"):
-                        record_study_session("flashcard", 0, 1, db_path=st.session_state.db_path)
-                        st.session_state.flashcard_revealed = False
-                        st.session_state.flashcard_index = (index + 1) % total_cards
-                        st.info("已標記為需要再複習")
-                        st.rerun()
-
-            card_key = card.get("english", "")
-            is_favorite = card_key in st.session_state.favorite_cards
-            if st.button("⭐ 收藏" if not is_favorite else "☆ 取消收藏"):
+        # 收藏
+        card_key = card.get("english", "")
+        is_favorite = card_key in st.session_state.favorite_cards
+        fav_col, save_col = st.columns([1, 1])
+        with fav_col:
+            fav_label = "☆ 取消收藏" if is_favorite else "⭐ 收藏此卡"
+            if st.button(fav_label, use_container_width=True):
                 if is_favorite:
-                    st.session_state.favorite_cards = [item for item in st.session_state.favorite_cards if item != card_key]
+                    st.session_state.favorite_cards = [i for i in st.session_state.favorite_cards if i != card_key]
                 else:
                     st.session_state.favorite_cards = sorted(set(st.session_state.favorite_cards + [card_key]))
                 st.rerun()
-            if is_favorite:
-                st.caption("目前卡片：已收藏")
+        with save_col:
+            if st.button("📂 存入分類", use_container_width=True):
+                save_translation_entry(
+                    card["english"], card["translation"], card.get("example", ""),
+                    category=selected_category, db_path=st.session_state.db_path,
+                )
+                st.success(f"已存入「{selected_category}」")
+
+        # 分類管理 & 單字清單（摺疊）
+        with st.expander("🗂️ 管理分類"):
+            new_cat = st.text_input("新增分類名稱", value=st.session_state.new_category_name, key="new_cat_input")
+            if st.button("新增分類", key="add_cat_btn") and new_cat.strip():
+                new_val = new_cat.strip()
+                merged_cats = sorted(set(st.session_state.saved_categories + [new_val]))
+                st.session_state.saved_categories = merged_cats
+                _save_saved_categories(merged_cats, st.session_state.db_path)
+                st.session_state.selected_category = new_val
+                st.session_state.new_category_name = ""
+                st.rerun()
+            if st.session_state.saved_categories:
+                tags_html = "".join(
+                    f"<span style='display:inline-block;background:#e0e7ff;color:#4f46e5;"
+                    f"border-radius:12px;padding:0.15rem 0.7rem;margin:0.15rem;font-size:0.82rem;'>{c}</span>"
+                    for c in st.session_state.saved_categories
+                )
+                st.markdown(f"<div style='margin-top:0.4rem;'>{tags_html}</div>", unsafe_allow_html=True)
+
+        with st.expander("📚 目前分類單字清單"):
+            all_cats = sorted(set([i.get("category", "未分類") for i in practice_items]) | set(st.session_state.saved_categories))
+            default_idx = all_cats.index(selected_category) if selected_category in all_cats else 0
+            list_category = st.selectbox("查看分類", options=all_cats, index=default_idx, key="word_list_cat")
+            cat_items = [i for i in practice_items if i.get("category", "未分類") == list_category]
+            if cat_items:
+                for idx, item in enumerate(cat_items):
+                    row_col, del_col = st.columns([9, 1])
+                    with row_col:
+                        ex = item.get("example", "")
+                        if ex:
+                            st.markdown(
+                                f"<div style='padding:0.3rem 0;border-bottom:1px solid #f1f5f9;'>"
+                                f"<b style='color:#4f46e5;'>{item['english']}</b>"
+                                f" <span style='color:#374151;'>→ {item['translation']}</span>"
+                                f"<br><span style='font-size:0.82rem;color:#6b7280;'>💬 {ex}</span></div>",
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            st.markdown(
+                                f"<div style='padding:0.3rem 0;border-bottom:1px solid #f1f5f9;'>"
+                                f"<b style='color:#4f46e5;'>{item['english']}</b>"
+                                f" <span style='color:#374151;'>→ {item['translation']}</span></div>",
+                                unsafe_allow_html=True,
+                            )
+                    with del_col:
+                        if st.button("🗑️", key=f"del_{idx}_{item['english']}"):
+                            delete_translation_entry(item["english"], db_path=st.session_state.db_path)
+                            st.success(f"已刪除 {item['english']}")
+                            st.rerun()
             else:
-                st.caption("目前卡片：未收藏")
-        else:
-            st.info("目前沒有可複習的單字，先新增幾個英文詞彙吧。")
+                st.info("這個分類目前沒有單字。")
 
-        st.markdown("---")
-        st.subheader("📖 字典式查詢")
-        search_query = st.text_input("搜尋英文或中文", placeholder="例如：hello 或 你好")
+    # ── 字典查詢區塊 ────────────────────────────────────────────
+    def _render_dictionary_section(self):
+        search_query = st.text_input(
+            "搜尋英文或中文",
+            placeholder="例如：resilience 或 韌性",
+            key="dict_search_input",
+        )
 
-        if "translation_result" not in st.session_state:
-            st.session_state.translation_result = None
-        if "example_candidates" not in st.session_state:
-            st.session_state.example_candidates = []
-
+        # 即時本機查詢
         if search_query.strip() and st.session_state.get("last_search_query") != search_query.strip():
             st.session_state.last_search_query = search_query.strip()
-            local_lookup = resolve_translation_lookup(search_query.strip(), db_path=st.session_state.db_path)
-            if local_lookup["source"] == "local":
+            local = resolve_translation_lookup(search_query.strip(), db_path=st.session_state.db_path)
+            if local["source"] == "local":
                 st.session_state.translation_result = {
-                    "english": local_lookup["english"] or search_query.strip(),
-                    "translation": local_lookup["translation"] or "（尚未取得）",
-                    "example": local_lookup.get("example", "") or "",
-                    "examples": local_lookup.get("examples", []),
+                    "english": local["english"] or search_query.strip(),
+                    "translation": local["translation"] or "（尚未取得）",
+                    "example": local.get("example", ""),
+                    "examples": local.get("examples", []),
                 }
-                st.session_state.example_candidates = local_lookup.get("examples", [])
+                st.session_state.example_candidates = local.get("examples", [])
                 st.rerun()
 
-        if st.button("🔍 查詢翻譯") and search_query.strip():
-            with st.spinner("正在查詢本機資料與生成內容..."):
+        if st.button("🔍 查詢翻譯", use_container_width=True, type="primary") and search_query.strip():
+            with st.spinner("查詢本機資料庫與 AI 生成中…"):
                 try:
-                    local_lookup = resolve_translation_lookup(search_query.strip(), db_path=st.session_state.db_path)
-                    if local_lookup["source"] == "local":
-                        translation = local_lookup["translation"]
-                        example_entries = local_lookup.get("examples", [])
-                        first_example = example_entries[0]["english"] if example_entries else local_lookup.get("example", "")
+                    local = resolve_translation_lookup(search_query.strip(), db_path=st.session_state.db_path)
+                    if local["source"] == "local":
+                        translation = local["translation"]
+                        example_entries = local.get("examples", [])
+                        first_example = example_entries[0]["english"] if example_entries else local.get("example", "")
                     else:
                         llm = LLMFactory.get_llm(
                             st.session_state.provider,
@@ -577,20 +688,20 @@ class EnglishLearningPage:
                             temperature=st.session_state.temperature,
                         )
                         prompt = (
-                            f"請提供英文單字或片語 '{search_query.strip()}' 的中文意思，並附上 3 個自然的英文例句與對應中文翻譯。"
-                            "格式請固定如下：\n中文意思：...\n例句1：...｜中文：...\n例句2：...｜中文：...\n例句3：...｜中文：..."
+                            f"請提供英文單字或片語 '{search_query.strip()}' 的中文意思，並附上 3 個自然的英文例句與對應中文翻譯。\n"
+                            "格式：中文意思：...\n例句1：...｜中文：...\n例句2：...｜中文：...\n例句3：...｜中文：..."
                         )
                         response = llm.invoke([HumanMessage(content=prompt)])
                         translation, _ = parse_llm_translation_response(response.content)
                         example_entries = parse_llm_example_items(response.content, fallback_translation=translation)
                         if not example_entries:
-                            first_example = parse_llm_example_sentences(response.content)
-                            example_entries = [{"english": item, "chinese": translation} for item in first_example]
+                            sents = parse_llm_example_sentences(response.content)
+                            example_entries = [{"english": s, "chinese": translation} for s in sents]
                         first_example = example_entries[0]["english"] if example_entries else ""
                     st.session_state.translation_result = {
-                        "english": local_lookup["english"] or search_query.strip(),
+                        "english": local["english"] or search_query.strip(),
                         "translation": translation or "（尚未取得）",
-                        "example": first_example or "",
+                        "example": first_example,
                         "examples": example_entries,
                     }
                     st.session_state.example_candidates = example_entries
@@ -601,113 +712,142 @@ class EnglishLearningPage:
 
         if st.session_state.translation_result:
             result = st.session_state.translation_result
-            with st.container():
-                st.markdown("### 查詢結果")
-                st.text_input("英文", value=result["english"], key="dictionary_english")
-                st.text_area("中文意思", value=result["translation"], key="dictionary_translation")
-                st.text_area("主要例句", value=result.get("example", ""), key="dictionary_example")
-                st.text_area("例句中文翻譯", value=(result.get("examples", [{}])[0].get("chinese", "") if result.get("examples") else ""), key="dictionary_example_translation")
-                if st.session_state.example_candidates:
-                    st.caption("例句與中文翻譯")
-                    for idx, example in enumerate(st.session_state.example_candidates, 1):
-                        if isinstance(example, dict):
-                            english = example.get("english", "")
-                            chinese = example.get("chinese", "")
-                        else:
-                            english = example
-                            chinese = ""
-                        st.write(f"{idx}. {english}")
-                        if chinese:
-                            st.caption(f"中文翻譯：{chinese}")
-                col_add, col_generate = st.columns(2)
-                with col_add:
-                    if st.button("➕ 加入單字本"):
-                        example_entries = merge_example_items(
-                            {"english": st.session_state.dictionary_example, "chinese": st.session_state.dictionary_example_translation},
-                            st.session_state.example_candidates,
-                            fallback_translation=st.session_state.dictionary_translation,
-                        )
-                        example_text = serialize_example_items(example_entries)
-                        save_translation_entry(
-                            st.session_state.dictionary_english,
-                            st.session_state.dictionary_translation,
-                            example_text,
-                            category=st.session_state.selected_category,
-                            db_path=st.session_state.db_path,
-                        )
-                        st.session_state.translation_result = {
-                            "english": st.session_state.dictionary_english,
-                            "translation": st.session_state.dictionary_translation,
-                            "example": example_entries[0]["english"] if example_entries else "",
-                            "examples": example_entries,
-                        }
-                        st.session_state.example_candidates = example_entries
-                        st.success("已加入單字本")
-                        st.rerun()
-                with col_generate:
-                    if st.button("🧠 生成多個例句"):
-                        with st.spinner("正在追加更多例句..."):
-                            try:
-                                llm = LLMFactory.get_llm(
-                                    st.session_state.provider,
-                                    model_name=st.session_state.model,
-                                    temperature=st.session_state.temperature,
-                                )
-                                prompt = (
-                                    f"請為英文單字或片語 '{st.session_state.dictionary_english}' 生成 3 個自然且有助於學習的英文例句，"
-                                    "每行請直接輸出『例句：英文內容｜中文：中文翻譯』。"
-                                )
-                                response = llm.invoke([HumanMessage(content=prompt)])
-                                generated_examples = parse_llm_example_items(response.content, fallback_translation=st.session_state.dictionary_translation)
-                                if not generated_examples:
-                                    generated_examples = [{"english": item, "chinese": st.session_state.dictionary_translation} for item in parse_llm_example_sentences(response.content)]
-                                merged_examples = merge_example_items(
-                                    {"english": st.session_state.dictionary_example, "chinese": st.session_state.dictionary_example_translation},
-                                    st.session_state.example_candidates + generated_examples,
-                                    fallback_translation=st.session_state.dictionary_translation,
-                                )
-                                st.session_state.example_candidates = merged_examples
-                                st.session_state.translation_result["examples"] = merged_examples
-                                st.session_state.translation_result["example"] = merged_examples[0]["english"] if merged_examples else ""
-                                st.success("已生成新的例句")
-                                st.rerun()
-                            except Exception as exc:
-                                st.error(f"生成例句失敗：{exc}")
 
+            # 查詢結果卡片
+            st.markdown(
+                f"<div style='background:#fff;border:1.5px solid #c7d2fe;border-radius:16px;"
+                f"padding:1.2rem 1.4rem;margin:0.6rem 0;box-shadow:0 4px 14px rgba(99,102,241,0.08);'>"
+                f"<div style='font-size:1.4rem;font-weight:800;color:#1e1b4b;'>{result['english']}</div>"
+                f"<div style='font-size:1rem;color:#4b5563;margin-top:0.3rem;'>{result['translation']}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            with st.container():
+                st.text_input("英文", value=result["english"], key="dictionary_english")
+                st.text_area("中文意思", value=result["translation"], key="dictionary_translation", height=70)
+                col_ex, col_cht = st.columns(2)
+                with col_ex:
+                    st.text_area("主要例句", value=result.get("example", ""), key="dictionary_example", height=80)
+                with col_cht:
+                    first_chinese = (result.get("examples") or [{}])[0].get("chinese", "")
+                    st.text_area("例句中文翻譯", value=first_chinese, key="dictionary_example_translation", height=80)
+
+            # 例句列表
+            if st.session_state.example_candidates:
+                st.markdown(
+                    "<div style='font-size:0.85rem;font-weight:600;color:#6366f1;margin:0.5rem 0 0.3rem;'>例句清單</div>",
+                    unsafe_allow_html=True,
+                )
+                for idx, ex in enumerate(st.session_state.example_candidates, 1):
+                    en = ex.get("english", "") if isinstance(ex, dict) else ex
+                    zh = ex.get("chinese", "") if isinstance(ex, dict) else ""
+                    st.markdown(
+                        f"<div style='background:#f8faff;border-left:3px solid #a5b4fc;border-radius:6px;"
+                        f"padding:0.45rem 0.8rem;margin-bottom:0.35rem;font-size:0.87rem;'>"
+                        f"<span style='color:#1e1b4b;'>{idx}. {en}</span>"
+                        + (f"<br><span style='color:#6b7280;font-size:0.82rem;'>　{zh}</span>" if zh else "")
+                        + "</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            act_col1, act_col2 = st.columns(2)
+            with act_col1:
+                if st.button("➕ 加入單字本", use_container_width=True, type="primary"):
+                    example_entries = merge_example_items(
+                        {"english": st.session_state.dictionary_example,
+                         "chinese": st.session_state.dictionary_example_translation},
+                        st.session_state.example_candidates,
+                        fallback_translation=st.session_state.dictionary_translation,
+                    )
+                    save_translation_entry(
+                        st.session_state.dictionary_english,
+                        st.session_state.dictionary_translation,
+                        serialize_example_items(example_entries),
+                        category=st.session_state.selected_category,
+                        db_path=st.session_state.db_path,
+                    )
+                    st.session_state.translation_result["examples"] = example_entries
+                    st.session_state.example_candidates = example_entries
+                    st.success(f"已加入「{st.session_state.selected_category}」單字本 ✓")
+                    st.rerun()
+            with act_col2:
+                if st.button("🧠 生成更多例句", use_container_width=True):
+                    with st.spinner("AI 生成例句中…"):
+                        try:
+                            llm = LLMFactory.get_llm(
+                                st.session_state.provider,
+                                model_name=st.session_state.model,
+                                temperature=st.session_state.temperature,
+                            )
+                            prompt = (
+                                f"請為英文單字或片語 '{st.session_state.dictionary_english}' 生成 3 個自然的英文例句，"
+                                "每行格式：例句：英文內容｜中文：中文翻譯"
+                            )
+                            resp = llm.invoke([HumanMessage(content=prompt)])
+                            gen = parse_llm_example_items(resp.content, fallback_translation=st.session_state.dictionary_translation)
+                            if not gen:
+                                gen = [{"english": s, "chinese": st.session_state.dictionary_translation}
+                                       for s in parse_llm_example_sentences(resp.content)]
+                            merged = merge_example_items(
+                                {"english": st.session_state.dictionary_example,
+                                 "chinese": st.session_state.dictionary_example_translation},
+                                st.session_state.example_candidates + gen,
+                                fallback_translation=st.session_state.dictionary_translation,
+                            )
+                            st.session_state.example_candidates = merged
+                            st.session_state.translation_result["examples"] = merged
+                            st.session_state.translation_result["example"] = merged[0]["english"] if merged else ""
+                            st.success("已生成更多例句 ✓")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"生成例句失敗：{exc}")
+
+        # 手動新增表單
+        st.markdown(
+            "<div style='font-size:0.85rem;font-weight:600;color:#6366f1;margin:1rem 0 0.3rem;'>✏️ 手動新增單字</div>",
+            unsafe_allow_html=True,
+        )
         with st.form("translation_form", clear_on_submit=True):
             categories = sorted(set(st.session_state.saved_categories + [st.session_state.selected_category]))
-            selected_save_category = st.selectbox("分類", options=categories, index=max(0, categories.index(st.session_state.selected_category)) if st.session_state.selected_category in categories else 0)
-            english_phrase = st.text_input("英文", value=(st.session_state.translation_result or {}).get("english", "") if st.session_state.translation_result else "", placeholder="Hello")
-            translation_phrase = st.text_input("中文說明", value=(st.session_state.translation_result or {}).get("translation", "") if st.session_state.translation_result else "", placeholder="你好")
-            example_sentence = st.text_input("例句", value=(st.session_state.translation_result or {}).get("example", "") if st.session_state.translation_result else "", placeholder="Hello, world!")
-            example_translation = st.text_input("例句中文翻譯", placeholder="你好")
-            submitted = st.form_submit_button("💾 儲存翻譯")
-            if submitted and english_phrase.strip():
-                example_entries = [{"english": example_sentence.strip(), "chinese": (example_translation.strip() or translation_phrase.strip())}]
-                save_translation_entry(
-                    english_phrase.strip(),
-                    translation_phrase.strip(),
-                    serialize_example_items(example_entries),
-                    category=selected_save_category,
-                    db_path=st.session_state.db_path,
-                )
-                st.session_state.selected_category = selected_save_category
-                st.success("✅ 已保存到本機資料庫")
-                st.rerun()
+            selected_save_cat = st.selectbox(
+                "分類",
+                options=categories,
+                index=max(0, categories.index(st.session_state.selected_category))
+                if st.session_state.selected_category in categories else 0,
+            )
+            f1, f2 = st.columns(2)
+            with f1:
+                english_phrase = st.text_input("英文", placeholder="resilience",
+                                               value=(st.session_state.translation_result or {}).get("english", ""))
+            with f2:
+                translation_phrase = st.text_input("中文說明", placeholder="韌性、恢復力",
+                                                   value=(st.session_state.translation_result or {}).get("translation", ""))
+            g1, g2 = st.columns(2)
+            with g1:
+                example_sentence = st.text_input("例句", placeholder="She showed great resilience.",
+                                                 value=(st.session_state.translation_result or {}).get("example", ""))
+            with g2:
+                example_translation = st.text_input("例句中文翻譯", placeholder="她展現了極大的韌性。")
+            if st.form_submit_button("💾 儲存單字", use_container_width=True):
+                if english_phrase.strip():
+                    ex_items = [{"english": example_sentence.strip(),
+                                 "chinese": example_translation.strip() or translation_phrase.strip()}]
+                    save_translation_entry(
+                        english_phrase.strip(), translation_phrase.strip(),
+                        serialize_example_items(ex_items),
+                        category=selected_save_cat,
+                        db_path=st.session_state.db_path,
+                    )
+                    st.session_state.selected_category = selected_save_cat
+                    st.success("✅ 已儲存到本機資料庫")
+                    st.rerun()
 
-        st.markdown("---")
-        st.subheader("🧪 TOEFL 風格測驗")
-        if "quiz_question" not in st.session_state:
-            st.session_state.quiz_question = None
-            st.session_state.quiz_options = []
-            st.session_state.quiz_answer = None
-            st.session_state.quiz_result = None
-
-        if "quiz_submitted" not in st.session_state:
-            st.session_state.quiz_submitted = False
+    # ── TOEFL 測驗區塊 ──────────────────────────────────────────
+    def _render_quiz_section(self):
+        practice_items = list_english_practice_items(limit=8, db_path=st.session_state.db_path)
 
         if not st.session_state.quiz_question:
-            practice_items = list_english_practice_items(limit=8, db_path=st.session_state.db_path)
             quiz_data = build_quiz_question(practice_items)
             st.session_state.quiz_question = quiz_data["question"]
             st.session_state.quiz_options = quiz_data["options"]
@@ -715,67 +855,100 @@ class EnglishLearningPage:
             st.session_state.quiz_result = None
             st.session_state.quiz_submitted = False
 
-        if st.session_state.quiz_question:
-            st.write(f"請選擇最適合的中文意思：**{st.session_state.quiz_question}**")
-            selected_answer = st.radio("選項", st.session_state.quiz_options, key="quiz_choice")
-            if not st.session_state.quiz_submitted:
-                if st.button("提交答案"):
-                    is_correct = selected_answer == st.session_state.quiz_answer
-                    st.session_state.quiz_result = is_correct
-                    st.session_state.quiz_submitted = True
-                    score = 1 if is_correct else 0
-                    record_study_session("toefl", score, 1, db_path=st.session_state.db_path)
-                    if is_correct:
-                        st.success("✅ 答對了")
-                    else:
-                        st.error(f"❌ 答錯了，正確答案是：{st.session_state.quiz_answer}")
-            else:
-                if st.session_state.quiz_result:
-                    st.success("✅ 答對了")
-                else:
-                    st.error(f"❌ 答錯了，正確答案是：{st.session_state.quiz_answer}")
-                if st.button("下一題"):
-                    st.session_state.quiz_question = None
-                    st.session_state.quiz_options = []
-                    st.session_state.quiz_answer = None
-                    st.session_state.quiz_result = None
-                    st.session_state.quiz_submitted = False
-                    st.rerun()
+        st.markdown(
+            f"<div style='background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);"
+            f"border:1.5px solid #fcd34d;border-radius:16px;padding:1.2rem 1.4rem;margin-bottom:0.8rem;"
+            f"box-shadow:0 4px 14px rgba(251,191,36,0.1);'>"
+            f"<div style='font-size:0.82rem;color:#92400e;font-weight:600;margin-bottom:0.3rem;'>請選擇最適合的中文意思</div>"
+            f"<div style='font-size:1.6rem;font-weight:800;color:#1c1917;'>{st.session_state.quiz_question}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
-        st.markdown("---")
-        st.subheader("📈 學習成效")
-        sessions = list_study_sessions(limit=8, db_path=st.session_state.db_path)
-        if sessions:
-            total_score = sum(item["score"] for item in sessions)
-            total_tests = sum(item["total"] for item in sessions)
-            average_accuracy = round(total_score / total_tests, 2) if total_tests else 0.0
-            st.metric("最近準確率", f"{average_accuracy * 100:.0f}%")
-            for item in sessions:
-                st.caption(f"{item['created_at'][:10]}｜{item['test_type']}｜{item['score']}/{item['total']}｜準確率 {item['accuracy'] * 100:.0f}%")
+        selected_answer = st.radio(
+            "選項", st.session_state.quiz_options,
+            key="quiz_choice", label_visibility="collapsed",
+        )
+
+        if not st.session_state.quiz_submitted:
+            if st.button("📝 提交答案", use_container_width=True, type="primary"):
+                is_correct = selected_answer == st.session_state.quiz_answer
+                st.session_state.quiz_result = is_correct
+                st.session_state.quiz_submitted = True
+                record_study_session("toefl", 1 if is_correct else 0, 1, db_path=st.session_state.db_path)
+                st.rerun()
         else:
-            st.info("目前還沒有測驗成效紀錄。")
+            if st.session_state.quiz_result:
+                st.success("🎉 答對了！答案正確。")
+            else:
+                st.error(f"❌ 答錯了，正確答案是：**{st.session_state.quiz_answer}**")
+            if st.button("➡️ 下一題", use_container_width=True):
+                st.session_state.quiz_question = None
+                st.session_state.quiz_options = []
+                st.session_state.quiz_answer = None
+                st.session_state.quiz_result = None
+                st.session_state.quiz_submitted = False
+                st.rerun()
 
-        st.markdown("---")
-        st.subheader("📊 學習趨勢")
+    # ── 學習成效 & 趨勢區塊 ─────────────────────────────────────
+    def _render_stats_section(self):
+        sessions = list_study_sessions(limit=8, db_path=st.session_state.db_path)
+        if not sessions:
+            st.info("目前還沒有測驗紀錄，先做一次測驗吧！")
+            return
+
+        total_score = sum(i["score"] for i in sessions)
+        total_tests = sum(i["total"] for i in sessions)
+        avg_acc = round(total_score / total_tests, 2) if total_tests else 0.0
+
+        st.markdown(
+            f"<div style='background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);"
+            f"border:1.5px solid #86efac;border-radius:14px;padding:0.9rem 1.2rem;"
+            f"margin-bottom:0.8rem;display:inline-block;'>"
+            f"<span style='font-size:0.85rem;color:#166534;font-weight:600;'>最近 8 次平均準確率　</span>"
+            f"<span style='font-size:1.5rem;font-weight:800;color:#15803d;'>{avg_acc * 100:.0f}%</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        rows_html = "".join(
+            f"<tr style='border-bottom:1px solid #f1f5f9;'>"
+            f"<td style='padding:0.35rem 0.6rem;color:#6b7280;font-size:0.82rem;'>{i['created_at'][:10]}</td>"
+            f"<td style='padding:0.35rem 0.6rem;font-size:0.82rem;'>{i['test_type']}</td>"
+            f"<td style='padding:0.35rem 0.6rem;font-weight:600;color:#4f46e5;'>{i['score']}/{i['total']}</td>"
+            f"<td style='padding:0.35rem 0.6rem;font-weight:600;color:#10b981;'>{i['accuracy'] * 100:.0f}%</td>"
+            f"</tr>"
+            for i in sessions
+        )
+        st.markdown(
+            f"<div style='border:1.5px solid #e0e7ff;border-radius:12px;overflow:hidden;margin-bottom:1rem;'>"
+            f"<table style='width:100%;border-collapse:collapse;'>"
+            f"<thead><tr style='background:#eef2ff;'>"
+            f"<th style='padding:0.5rem 0.6rem;text-align:left;font-size:0.82rem;color:#4338ca;'>日期</th>"
+            f"<th style='padding:0.5rem 0.6rem;text-align:left;font-size:0.82rem;color:#4338ca;'>類型</th>"
+            f"<th style='padding:0.5rem 0.6rem;text-align:left;font-size:0.82rem;color:#4338ca;'>答對/總題</th>"
+            f"<th style='padding:0.5rem 0.6rem;text-align:left;font-size:0.82rem;color:#4338ca;'>準確率</th>"
+            f"</tr></thead><tbody>{rows_html}</tbody></table></div>",
+            unsafe_allow_html=True,
+        )
+
+        # 趨勢圖
         trend_sessions = list_study_sessions(limit=30, db_path=st.session_state.db_path)
         if trend_sessions:
-            trend_rows = []
+            trend_rows: list = []
             for item in trend_sessions:
                 day = item["created_at"][:10]
-                existing = next((row for row in trend_rows if row["date"] == day), None)
+                existing = next((r for r in trend_rows if r["date"] == day), None)
                 if existing is None:
                     trend_rows.append({"date": day, "score": item["score"], "total": item["total"], "accuracy": item["accuracy"]})
                 else:
                     existing["score"] += item["score"]
                     existing["total"] += item["total"]
                     existing["accuracy"] = round((existing["accuracy"] + item["accuracy"]) / 2, 2)
+            trend_rows = sorted(trend_rows, key=lambda r: r["date"])
 
-            trend_rows = sorted(trend_rows, key=lambda item: item["date"])
-            st.line_chart({"每日準確率": [row["accuracy"] for row in trend_rows]})
-            st.bar_chart({"每日題數": [row["total"] for row in trend_rows]})
-            st.dataframe(
-                [{"日期": row["date"], "答對": row["score"], "總題數": row["total"], "準確率": f"{row['accuracy'] * 100:.0f}%"} for row in trend_rows],
-                use_container_width=True,
-            )
-        else:
-            st.info("目前還沒有測驗成效紀錄，先做一次測驗即可看到趨勢圖表。")
+            t1, t2 = st.tabs(["📈 每日準確率", "📊 每日題數"])
+            with t1:
+                st.line_chart({"準確率": [r["accuracy"] for r in trend_rows]})
+            with t2:
+                st.bar_chart({"題數": [r["total"] for r in trend_rows]})

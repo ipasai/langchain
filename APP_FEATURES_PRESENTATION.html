@@ -1,181 +1,868 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LangChain 多模型應用功能簡報</title>
+  <title>智慧學習與資料管理新典範：LangChain 多模型交互式應用 功能簡報</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700;900&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
   <style>
     :root {
-      --bg: #0f172a;
-      --panel: #111827;
-      --accent: #6366f1;
-      --accent2: #14b8a6;
-      --text: #f8fafc;
-      --muted: #cbd5e1;
+      --bg-dark: #070913;
+      --bg-card: rgba(18, 24, 43, 0.75);
+      --bg-card-hover: rgba(30, 41, 69, 0.85);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --border-glow: rgba(99, 102, 241, 0.4);
+      --primary: #6366f1;
+      --primary-light: #818cf8;
+      --secondary: #a855f7;
+      --accent: #10b981;
+      --accent-amber: #f59e0b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --gradient-accent: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+      --gradient-card: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+      --shadow-glow: 0 10px 30px -10px rgba(99, 102, 241, 0.3);
     }
-    body {
-      margin: 0;
-      font-family: "Noto Sans TC", "Microsoft JhengHei", Arial, sans-serif;
-      background: linear-gradient(135deg, var(--bg), #111827 70%);
-      color: var(--text);
-    }
-    .slide {
-      min-height: 100vh;
-      padding: 56px 64px;
+
+    * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.15) 0%, transparent 40%);
+      color: var(--text-main);
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      min-height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Progress Bar */
+    .progress-bar-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 100;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--gradient-accent);
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Navigation Bar */
+    .navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 36px;
+      background: rgba(7, 9, 19, 0.8);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-color);
+      z-index: 90;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      background: var(--gradient-accent);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .nav-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-nav {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.25s ease;
+    }
+    .btn-nav:hover {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+    .slide-select {
+      background: rgba(18, 24, 43, 0.9);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Main Slides Container */
+    .slides-wrapper {
+      flex: 1;
+      position: relative;
+      width: 100%;
+      height: calc(100vh - 140px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 48px 56px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.96) translateY(20px);
+      transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow-y: auto;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1) translateY(0);
+    }
+
+    /* Slide Header */
+    .slide-header {
+      margin-bottom: 24px;
+    }
+    .slide-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: var(--primary-light);
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .slide-title {
+      font-size: 2.2rem;
+      font-weight: 700;
+      font-family: 'Outfit', 'Noto Sans TC', sans-serif;
+      line-height: 1.25;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .slide-subtitle {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    /* Slide Content Grids */
+    .slide-body {
+      flex: 1;
       display: flex;
       flex-direction: column;
       justify-content: center;
+      gap: 20px;
     }
-    .slide h1 { font-size: 2.4rem; margin-bottom: 0.6rem; }
-    .slide h2 { font-size: 1.8rem; margin-bottom: 0.8rem; color: #dbeafe; }
-    .slide p, .slide li { font-size: 1.08rem; line-height: 1.8; color: var(--muted); }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
-    .card {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    /* Glass Cards */
+    .glass-card {
+      background: var(--gradient-card);
+      border: 1px solid var(--border-color);
       border-radius: 16px;
-      padding: 16px 18px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      padding: 24px;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
     }
-    .tag {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(99,102,241,0.2);
-      color: #c7d2fe;
-      margin-right: 8px;
+    .glass-card:hover {
+      border-color: var(--border-glow);
+      background: var(--bg-card-hover);
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-glow);
+    }
+    .glass-card .icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.2);
+      color: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      margin-bottom: 4px;
+    }
+    .glass-card h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .glass-card p, .glass-card ul {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+    .glass-card ul {
+      list-style-type: none;
+    }
+    .glass-card ul li {
+      position: relative;
+      padding-left: 20px;
       margin-bottom: 8px;
+    }
+    .glass-card ul li::before {
+      content: "•";
+      color: var(--primary-light);
+      font-size: 1.4rem;
+      position: absolute;
+      left: 0;
+      top: -3px;
+    }
+
+    /* Title Slide Hero Style */
+    .hero-slide {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+    }
+    .hero-badge {
+      padding: 8px 20px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #d8b4fe;
+      font-weight: 600;
       font-size: 0.95rem;
     }
-    .hero { font-size: 1.25rem; max-width: 900px; }
-    .footer { margin-top: 24px; color: #94a3b8; font-size: 0.95rem; }
+    .hero-title {
+      font-size: 3.2rem;
+      font-weight: 800;
+      font-family: 'Outfit', 'Noto Sans TC', sans-serif;
+      line-height: 1.2;
+      background: var(--gradient-accent);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      max-width: 950px;
+    }
+    .hero-subtitle {
+      font-size: 1.4rem;
+      color: var(--text-muted);
+      max-width: 800px;
+      font-weight: 400;
+    }
+    .hero-meta {
+      margin-top: 16px;
+      display: flex;
+      gap: 24px;
+      color: #cbd5e1;
+      font-size: 1rem;
+    }
+    .hero-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 8px 18px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    /* Bottom Control Bar */
+    .footer-bar {
+      height: 60px;
+      background: rgba(7, 9, 19, 0.85);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 36px;
+      z-index: 90;
+    }
+    .slide-counter {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .nav-arrow-btns {
+      display: flex;
+      gap: 12px;
+    }
+    .btn-circle {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      font-size: 1rem;
+    }
+    .btn-circle:hover {
+      background: var(--primary);
+      border-color: var(--primary-light);
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.5);
+    }
+    .btn-circle:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      box-shadow: none;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Tech Stack Tags */
+    .tech-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      font-size: 0.85rem;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 900px) {
+      .slide { padding: 28px 24px; inset: 12px; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .hero-title { font-size: 2.2rem; }
+      .hero-subtitle { font-size: 1.1rem; }
+      .slide-title { font-size: 1.7rem; }
+    }
   </style>
 </head>
 <body>
-  <section class="slide">
-    <h1>🤖 LangChain 多模型應用</h1>
-    <p class="hero">這是一個整合 AI 對話、資料庫管理與英文學習的多功能 Web App，讓使用者可以在同一個介面中完成模型互動、資料查詢與單字管理。</p>
-    <div class="grid">
-      <div class="card">
-        <h2>核心目標</h2>
-        <ul>
-          <li>支援多模型 AI 對話</li>
-          <li>提供資料庫管理與查詢</li>
-          <li>輔助英文學習與單字複習</li>
-        </ul>
+
+  <!-- Top Progress Bar -->
+  <div class="progress-bar-container">
+    <div class="progress-bar-fill" id="progress-bar"></div>
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <i class="fa-solid fa-layer-group"></i>
+      <span>LangChain Presentation</span>
+    </div>
+    <div class="nav-controls">
+      <select id="slide-select" class="slide-select" onchange="jumpToSlide(parseInt(this.value))">
+        <!-- Generated dynamically -->
+      </select>
+      <button class="btn-nav" id="btn-fullscreen" onclick="toggleFullscreen()">
+        <i class="fa-solid fa-expand"></i> 全螢幕
+      </button>
+    </div>
+  </nav>
+
+  <!-- Slides Wrapper Container -->
+  <main class="slides-wrapper">
+
+    <!-- Slide 1: Cover Title -->
+    <section class="slide active hero-slide" id="slide-1">
+      <div class="hero-badge">
+        <i class="fa-solid fa-sparkles"></i> 多模型交互式應用簡報
       </div>
-      <div class="card">
-        <h2>支援平台</h2>
-        <div>
-          <span class="tag">Ollama</span><span class="tag">OpenAI</span><span class="tag">Google Gemini</span>
+      <h1 class="hero-title">智慧學習與資料管理新典範<br>LangChain 多模型交互式應用</h1>
+      <p class="hero-subtitle">整合本地 AI 模型與 SQLite 的全方位效率工具技術解密與操作指南</p>
+      <div class="hero-meta">
+        <div class="hero-meta-item">
+          <i class="fa-solid fa-code-branch" style="color:var(--primary-light);"></i>
+          <span>版本：v2.5.0</span>
         </div>
-        <div>
-          <span class="tag">SQLite</span><span class="tag">MySQL</span><span class="tag">PostgreSQL</span>
-          <span class="tag">MariaDB</span><span class="tag">Redis</span><span class="tag">MongoDB</span>
+        <div class="hero-meta-item">
+          <i class="fa-solid fa-user-gear" style="color:var(--secondary);"></i>
+          <span>報告：LangChain 開發團隊</span>
+        </div>
+        <div class="hero-meta-item">
+          <i class="fa-solid fa-shield-halved" style="color:var(--accent);"></i>
+          <span>100% 本地隱私防護</span>
         </div>
       </div>
-    </div>
-    <div class="footer">由 LangChain + Streamlit 構建，支援本機記憶與資料持久化</div>
-  </section>
+    </section>
 
-  <section class="slide">
-    <h2>💬 AI 對話功能</h2>
-    <div class="grid">
-      <div class="card">
-        <ul>
-          <li>可在側邊欄切換模型提供者</li>
-          <li>可調整溫度參數，控制輸出風格</li>
-          <li>保留對話歷史，方便後續回顧</li>
-          <li>支援清除歷史與重新開始新對話</li>
-        </ul>
+    <!-- Slide 2: Core Advantages -->
+    <section class="slide" id="slide-2">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-star"></i> Core Advantages</span>
+        <h2 class="slide-title">系統核心優勢 (Core Advantages)</h2>
+        <p class="slide-subtitle">打造靈活、隱私與高效並重的個人智慧工作站</p>
       </div>
-      <div class="card">
-        <ul>
-          <li>支援自然語言提問</li>
-          <li>可直接串接不同 LLM 服務</li>
-          <li>適合做問答、翻譯、摘要與日常助理</li>
-        </ul>
+      <div class="slide-body grid-3">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-sliders"></i></div>
+          <h3>多模型彈性切換</h3>
+          <p>支援本地端 Ollama 等多種 AI 供應商與模型（如 qwen2.5:1.5b），兼顧隱私防護與計算效能。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(168,85,247,0.2); color:var(--secondary);"><i class="fa-solid fa-user-ninja"></i></div>
+          <h3>專屬角色設定 (Persona)</h3>
+          <p>可依需求隨時切換 AI 角色（如：資料庫專家），提供更精準、具備領域專業知識的互動回應。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(16,185,129,0.2); color:var(--accent);"><i class="fa-solid fa-database"></i></div>
+          <h3>輕量化在地儲存</h3>
+          <p>整合本機 SQLite 資料庫，資料完全由個人自主掌控，離線也能穩定運作與快速讀取。</p>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="slide">
-    <h2>🗄️ 資料庫管理功能</h2>
-    <div class="grid">
-      <div class="card">
-        <ul>
-          <li>支援 SQLite、MySQL、PostgreSQL、MariaDB、Redis、MongoDB</li>
-          <li>可輸入連線設定並進行測試連線</li>
-          <li>自動分析資料表結構、欄位與關聯</li>
-          <li>可預覽表格內容與資料行數</li>
-        </ul>
+    <!-- Slide 3: Technical Stack -->
+    <section class="slide" id="slide-3">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-microchip"></i> Technical Stack</span>
+        <h2 class="slide-title">核心工具與技術棧 (Technical Stack)</h2>
+        <p class="slide-subtitle">結合頂級開源框架，建構穩固可靠的系統架構</p>
       </div>
-      <div class="card">
-        <ul>
-          <li>支援 SQL 查詢執行</li>
-          <li>支援資料列 CRUD 操作</li>
-          <li>支援單筆刪除與批次編輯</li>
-          <li>提供更漂亮的資料表編輯介面與 CSV 下載</li>
-        </ul>
+      <div class="slide-body grid-2">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-desktop"></i></div>
+          <h3>🖥️ 前端互動介面：Streamlit</h3>
+          <p>負責整個應用的 Web UI 視覺化呈現與響應式元件互動（包含導覽列、側邊欄、對話框與動態數據表格）。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(168,85,247,0.2); color:var(--secondary);"><i class="fa-solid fa-brain"></i></div>
+          <h3>🤖 AI 應用編排框架：LangChain</h3>
+          <p>系統的核心大腦。負責串接 AI 模型、管理 Prompt 提示詞、動態切換 Persona 角色設定及建立對話記憶。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(16,185,129,0.2); color:var(--accent);"><i class="fa-solid fa-robot"></i></div>
+          <h3>🧠 本地 LLM 模型：Ollama (qwen2.5:1.5b)</h3>
+          <p>100% 在地化運行 AI 任務（對話、SQL 生成、生字生成），保障隱私，無網絡環境下也能流暢運作。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(245,158,11,0.2); color:var(--accent-amber);"><i class="fa-solid fa-hard-drive"></i></div>
+          <h3>🗄️ 資料儲存管理：SQLite3 & SQLAlchemy</h3>
+          <p>輕量級本機資料庫，免架設伺服器。高效儲存與讀取單字資料、歷史對話與學習成效數據。</p>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="slide">
-    <h2>📘 英文學習功能</h2>
-    <div class="grid">
-      <div class="card">
-        <ul>
-          <li>可新增英文單字與中文翻譯</li>
-          <li>可附加例句並儲存到本機資料庫</li>
-          <li>支援依照分類管理單字</li>
-          <li>可在分類單字清單中查看例句與刪除單筆資料</li>
-        </ul>
+    <!-- Slide 4: Features Overview -->
+    <section class="slide" id="slide-4">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-cubes"></i> Features Overview</span>
+        <h2 class="slide-title">功能模組總覽 (Features Overview)</h2>
+        <p class="slide-subtitle">透過直覺的導覽列，無縫整合三大核心工作板塊</p>
       </div>
-      <div class="card">
-        <ul>
-          <li>提供單字卡片複習模式</li>
-          <li>支援收藏與今日複習紀錄</li>
-          <li>提供 TOEFL 風格測驗與學習成效統計</li>
-          <li>可追蹤最近準確率與每日趨勢</li>
-        </ul>
+      <div class="slide-body grid-3">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-comments fa-solid"></i></div>
+          <h3>1. 💬 AI 對話模組</h3>
+          <ul>
+            <li>靈活的模型參數微調</li>
+            <li>專業 Persona 角色設定</li>
+            <li>長對話上下文連貫記憶</li>
+            <li>一鍵重置對話歷史</li>
+          </ul>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(168,85,247,0.2); color:var(--secondary);"><i class="fa-solid fa-table"></i></div>
+          <h3>2. 🗄️ 資料庫管理模組</h3>
+          <ul>
+            <li>智慧 Schema 結構解析</li>
+            <li>資料列完整 CRUD 操作</li>
+            <li>自然語言轉 SQL (Text-to-SQL)</li>
+            <li>數據結果一鍵匯出 CSV</li>
+          </ul>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(16,185,129,0.2); color:var(--accent);"><i class="fa-solid fa-book-open"></i></div>
+          <h3>3. 📘 英文學習模組</h3>
+          <ul>
+            <li>AI Auto-Vocabulary 智能化生成</li>
+            <li>雙向翻轉卡片與字典查詢</li>
+            <li>TOEFL 情境多選模擬測驗</li>
+            <li>科學化學習成效趨勢圖表</li>
+          </ul>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="slide">
-    <h2>🔍 字典式查詢與例句生成</h2>
-    <div class="grid">
-      <div class="card">
-        <ul>
-          <li>先查詢本機已儲存的翻譯資料</li>
-          <li>若沒有找到，才會請模型生成翻譯內容</li>
-          <li>查詢結果可直接填入儲存欄位</li>
-          <li>支援新增與合併多個例句</li>
-        </ul>
+    <!-- Slide 5: System Settings -->
+    <section class="slide" id="slide-5">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-gears"></i> System Settings</span>
+        <h2 class="slide-title">系統設定與環境配置 (System Settings)</h2>
+        <p class="slide-subtitle">全方位自訂參數與連線監測機制</p>
       </div>
-      <div class="card">
-        <ul>
-          <li>支援生成多個例句並追加到原有例句</li>
-          <li>儲存時會把完整例句群一起寫入資料庫</li>
-          <li>後續查詢與顯示時可完整呈現</li>
-        </ul>
+      <div class="slide-body grid-3">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-temperature-half"></i></div>
+          <h3>模型參數即時微調</h3>
+          <p>直覺調整溫度參數 (Temperature)，對話時可調高創意度，轉 SQL 時可調低以求精準度。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(16,185,129,0.2); color:var(--accent);"><i class="fa-solid fa-circle-check"></i></div>
+          <h3>一鍵測試連線</h3>
+          <p>整合 SQLite 資料庫，配置成功後即時顯示連線狀態與版本提示，確保資料讀寫穩定。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(239,68,68,0.2); color:#ef4444;"><i class="fa-solid fa-trash-can"></i></div>
+          <h3>對話歷史清空</h3>
+          <p>提供一鍵「清除對話歷史」功能，隨時重置對話上下文與快取記憶，維護系統乾淨度。</p>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="slide">
-    <h2>🚀 開始使用方式</h2>
-    <div class="card">
-      <ol>
-        <li>啟動虛擬環境並安裝相依套件</li>
-        <li>執行主程式：python main.py</li>
-        <li>選擇 AI 對話、資料庫管理或英文學習頁籤</li>
-        <li>依需求設定模型、連線與學習資料</li>
-      </ol>
+    <!-- Slide 6: AI Chat Module -->
+    <section class="slide" id="slide-6">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-comments"></i> Feature 01</span>
+        <h2 class="slide-title">核心功能一：💬 智能 AI 對話模組 (AI Chat)</h2>
+        <p class="slide-subtitle">具備動態角色與長上下文記憶的智能助手</p>
+      </div>
+      <div class="slide-body grid-3">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-user-gear"></i></div>
+          <h3>動態 Persona 切換</h3>
+          <p>可隨時切換為「資料庫專家 (Database Expert)」或其他專業角色，AI 自動調整對話風格與專業領域知識。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(168,85,247,0.2); color:var(--secondary);"><i class="fa-solid fa-memory"></i></div>
+          <h3>上下文記憶長對話</h3>
+          <p>透過 LangChain 的 Memory 機制，AI 能記住前文對話內容，實現流暢、具備連續性的問答與代碼除錯。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(16,185,129,0.2); color:var(--accent);"><i class="fa-solid fa-lock"></i></div>
+          <h3>本地隱私保障</h3>
+          <p>所有的聊天對話均在本地端模型運行，企業或個人敏感資料絕對不會外流至任何雲端伺服器。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 7: Database Schema Analyzer -->
+    <section class="slide" id="slide-7">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-network-wired"></i> Feature 02-A</span>
+        <h2 class="slide-title">核心功能二(A)：🗄️ 智慧資料庫分析功能 (Smart Schema Analyzer)</h2>
+        <p class="slide-subtitle">技術亮點：自動解析結構與關聯網絡</p>
+      </div>
+      <div class="slide-body grid-2">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-diagram-project"></i></div>
+          <h3>資料結構自動解析與動態監測</h3>
+          <ul>
+            <li>連線成功後，自動抓取資料庫類型與版本</li>
+            <li>精準列出全庫資料表（如 chat_messages, english_practice）</li>
+            <li>動態讀取並呈現各表目前列數 (Row Count) 及詳細欄位型態 (INTEGER, TEXT)</li>
+          </ul>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(168,85,247,0.2); color:var(--secondary);"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+          <h3>AI 智能用途辨識與關聯檢測</h3>
+          <ul>
+            <li>由 AI 自動判讀並定義資料表屬性（業務資料表 / 設定資料表）</li>
+            <li>外鍵關聯智慧檢測：自動判讀資料表之間是否存在外鍵關聯</li>
+            <li>輔助使用者一目了然掌握全庫資料模型網絡</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 8: Text to SQL -->
+    <section class="slide" id="slide-8">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-code"></i> Feature 02-B</span>
+        <h2 class="slide-title">核心功能二(B)：🗄️ 自然語言轉 SQL 查詢 (Text-to-SQL)</h2>
+        <p class="slide-subtitle">無需死記語法，用口語中文直接指揮資料庫</p>
+      </div>
+      <div class="slide-body grid-2">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-language"></i></div>
+          <h3>自然語言智慧翻譯（Text-to-SQL）</h3>
+          <p>使用者只需輸入口語化的中文指令（例如：「我需要查詢目前字典有多少類型且各類型有多少字的語法」），系統透過 LangChain 結合當前 Schema 結構，精準生成正確的 SQL 指令。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(16,185,129,0.2); color:var(--accent);"><i class="fa-solid fa-play"></i></div>
+          <h3>即時執行與數據視覺化</h3>
+          <p>AI 生成 SQL 後可一鍵直接在本地 SQLite 執行，並將查詢結果以直觀的表格呈現，同時支援將結果匯出下載為 CSV 檔案進行後續分析。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 9: Smart Vocabulary -->
+    <section class="slide" id="slide-9">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-book"></i> Feature 03</span>
+        <h2 class="slide-title">功能亮點：📘 智能英文學習系統 (Smart Vocabulary)</h2>
+        <p class="slide-subtitle">結合 AI 智能化生成與科學化卡片複習</p>
+      </div>
+      <div class="slide-body grid-2">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-bolt"></i></div>
+          <h3>AI Auto-Vocabulary (一鍵生成生字集)</h3>
+          <p>使用者可自訂主題（如：TOEFL 核心字彙）、難度與生成數量。AI 自動生成單字、翻譯及例句，並自動匯入本機字庫，免去手動輸入的麻煩。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(168,85,247,0.2); color:var(--secondary);"><i class="fa-solid fa-chart-line"></i></div>
+          <h3>學習成效追蹤</h3>
+          <p>系統自動記錄總單字數量、測驗次數，並顯示今日複習狀態提醒，幫使用者建立科學化的每日學習習慣。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 10: Flashcards & Dictionary -->
+    <section class="slide" id="slide-10">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-clone"></i> Core Operation</span>
+        <h2 class="slide-title">核心操作：🃏 單字卡片與字典查詢 (Flashcards & Dictionary)</h2>
+        <p class="slide-subtitle">靈活的多功能學習記憶工具</p>
+      </div>
+      <div class="slide-body grid-2">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-rotate"></i></div>
+          <h3>雙向卡片模式</h3>
+          <p>支援切換「顯示英文」或「顯示中文」自我測驗，可快速切換上/下一張，並支援一鍵收藏單字至個人口袋清單。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(245,158,11,0.2); color:var(--accent-amber);"><i class="fa-solid fa-spell-check"></i></div>
+          <h3>分類管理與手動擴充</h3>
+          <p>支援自訂新增分類標籤（如：TOEFL、未分類）。內建字典式查詢，允許手動編輯或新增英文、中文說明、例句與例句翻譯，並一鍵儲存（💾）至本機資料庫。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 11: Quiz & Analytics -->
+    <section class="slide" id="slide-11">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-graduation-cap"></i> Analytics</span>
+        <h2 class="slide-title">情境測驗與成效趨勢 (TOEFL Quiz & Analytics)</h2>
+        <p class="slide-subtitle">數據化驗收學習成果</p>
+      </div>
+      <div class="slide-body grid-2">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-list-check"></i></div>
+          <h3>情境式模擬測驗</h3>
+          <p>系統由字庫或 AI 自動出題，提供多選一的互動測驗（如單字在特定語境下的語意選擇），全面驗收學習成果。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(16,185,129,0.2); color:var(--accent);"><i class="fa-solid fa-chart-pie"></i></div>
+          <h3>數據化學習趨勢</h3>
+          <p>提交答案後立即計算並更新「最近準確率」。詳細羅列每日的測驗日期、分類、題數與準確率，實現科學化的學習成效回饋。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 12: Summary & Q&A -->
+    <section class="slide" id="slide-12">
+      <div class="slide-header">
+        <span class="slide-tag"><i class="fa-solid fa-flag-checkered"></i> Conclusion</span>
+        <h2 class="slide-title">結語與未來展望 (Summary & Q&A)</h2>
+        <p class="slide-subtitle">持續進化，邁向全方位智慧 AI 工作站</p>
+      </div>
+      <div class="slide-body grid-3">
+        <div class="glass-card">
+          <div class="icon-box"><i class="fa-solid fa-award"></i></div>
+          <h3>系統結語</h3>
+          <p>成功利用 LangChain、Ollama 與 Streamlit 將強大的 AI 能力落地於個人端，打造出高度隱私、智慧結構解析與 Text-to-SQL 的全方位工作站。</p>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(168,85,247,0.2); color:var(--secondary);"><i class="fa-solid fa-rocket"></i></div>
+          <h3>未來擴充方向</h3>
+          <ul>
+            <li>支援 OpenAI / Claude 雲端模型 API</li>
+            <li>導入 RAG 檢索增強生成（PDF 問答與摘要）</li>
+            <li>擴充 Text-to-SQL 多表 Join 查詢與自動繪圖</li>
+          </ul>
+        </div>
+        <div class="glass-card">
+          <div class="icon-box" style="background:rgba(16,185,129,0.2); color:var(--accent);"><i class="fa-solid fa-comments"></i></div>
+          <h3>Q & A 時間</h3>
+          <p>感謝您的聆聽與關注！歡迎提出寶貴意見與交流交流。</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Control Bar -->
+  <footer class="footer-bar">
+    <div class="slide-counter" id="slide-counter">
+      Slide 1 / 12
     </div>
-    <div class="footer">更多說明請參閱 README.md</div>
-  </section>
+    <div class="nav-arrow-btns">
+      <button class="btn-circle" id="btn-prev" onclick="prevSlide()" title="上一張 (Left Arrow)">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+      <button class="btn-circle" id="btn-next" onclick="nextSlide()" title="下一張 (Right Arrow / Space)">
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 12;
+
+    const slides = document.querySelectorAll('.slide');
+    const progressBar = document.getElementById('progress-bar');
+    const slideCounter = document.getElementById('slide-counter');
+    const slideSelect = document.getElementById('slide-select');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+
+    // Populate Slide Dropdown Select
+    function initSelectOptions() {
+      slideSelect.innerHTML = '';
+      for (let i = 1; i <= totalSlides; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `投影片 ${i} / ${totalSlides}`;
+        slideSelect.appendChild(option);
+      }
+    }
+
+    function updateSlideUI() {
+      // Update Slide Display
+      slides.forEach((slide, index) => {
+        if (index + 1 === currentSlide) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      // Update Progress Bar
+      const progressPercent = ((currentSlide - 1) / (totalSlides - 1)) * 100;
+      progressBar.style.width = `${progressPercent}%`;
+
+      // Update Counter and Select
+      slideCounter.textContent = `Slide ${currentSlide} / ${totalSlides}`;
+      slideSelect.value = currentSlide;
+
+      // Update Buttons Status
+      btnPrev.disabled = currentSlide === 1;
+      btnNext.disabled = currentSlide === totalSlides;
+    }
+
+    function jumpToSlide(index) {
+      if (index >= 1 && index <= totalSlides) {
+        currentSlide = index;
+        updateSlideUI();
+      }
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        currentSlide++;
+        updateSlideUI();
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        currentSlide--;
+        updateSlideUI();
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error(`Fullscreen request failed: ${err.message}`);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Keyboard Shortcuts Navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'Space' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      }
+    });
+
+    // Touch Swipe Support for Mobile/Tablet
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    });
+
+    document.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      if (touchStartX - touchEndX > 50) {
+        nextSlide();
+      } else if (touchEndX - touchStartX > 50) {
+        prevSlide();
+      }
+    });
+
+    // Initialize
+    initSelectOptions();
+    updateSlideUI();
+  </script>
 </body>
 </html>
