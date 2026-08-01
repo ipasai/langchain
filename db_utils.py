@@ -47,6 +47,7 @@ def ensure_local_memory_database(db_path: Optional[str] = None) -> str:
             "CREATE TABLE IF NOT EXISTS english_practice (id INTEGER PRIMARY KEY AUTOINCREMENT, english TEXT NOT NULL, translation TEXT NOT NULL, example TEXT, created_at TEXT NOT NULL)"
         )
         _ensure_table_column(connection, "english_practice", "example", "TEXT")
+        _ensure_table_column(connection, "english_practice", "phonetic", "TEXT")
         cursor.execute(
             "CREATE TABLE IF NOT EXISTS study_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, test_type TEXT NOT NULL, score INTEGER NOT NULL, total INTEGER NOT NULL, accuracy REAL NOT NULL, created_at TEXT NOT NULL)"
         )
@@ -129,14 +130,15 @@ def clear_chat_messages(db_path: Optional[str] = None) -> None:
         connection.close()
 
 
-def save_translation_entry(english: str, translation: str, example: str = "", db_path: Optional[str] = None, category: Optional[str] = None) -> None:
+def save_translation_entry(english: str, translation: str, example: str = "", db_path: Optional[str] = None, category: Optional[str] = None, phonetic: Optional[str] = None) -> None:
     db_path = ensure_local_memory_database(db_path)
     connection = sqlite3.connect(db_path)
     try:
         _ensure_table_column(connection, "english_practice", "category", "TEXT")
+        _ensure_table_column(connection, "english_practice", "phonetic", "TEXT")
         connection.execute(
-            "INSERT INTO english_practice (english, translation, example, category, created_at) VALUES (?, ?, ?, ?, ?)",
-            (english.lower().strip(), translation.strip(), example.strip(), (category or "未分類").strip(), datetime.utcnow().isoformat()),
+            "INSERT INTO english_practice (english, translation, example, category, phonetic, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (english.lower().strip(), translation.strip(), example.strip(), (category or "未分類").strip(), (phonetic or "").strip(), datetime.utcnow().isoformat()),
         )
         connection.commit()
     finally:
@@ -161,12 +163,13 @@ def search_translation_entries(query: str, db_path: Optional[str] = None) -> Lis
     db_path = ensure_local_memory_database(db_path)
     connection = sqlite3.connect(db_path)
     try:
+        _ensure_table_column(connection, "english_practice", "phonetic", "TEXT")
         search_term = f"%{query.lower().strip()}%"
         rows = connection.execute(
-            "SELECT english, translation, example, created_at FROM english_practice WHERE lower(english) LIKE ? OR lower(translation) LIKE ? ORDER BY id DESC LIMIT 10",
+            "SELECT english, translation, example, created_at, phonetic FROM english_practice WHERE lower(english) LIKE ? OR lower(translation) LIKE ? ORDER BY id DESC LIMIT 10",
             (search_term, search_term),
         ).fetchall()
-        return [{"english": row[0], "translation": row[1], "example": row[2], "created_at": row[3]} for row in rows]
+        return [{"english": row[0], "translation": row[1], "example": row[2], "created_at": row[3], "phonetic": row[4] or ""} for row in rows]
     finally:
         connection.close()
 
@@ -180,11 +183,12 @@ def list_english_practice_items(limit: int = 10, db_path: Optional[str] = None) 
     connection = sqlite3.connect(db_path)
     try:
         _ensure_table_column(connection, "english_practice", "category", "TEXT")
+        _ensure_table_column(connection, "english_practice", "phonetic", "TEXT")
         rows = connection.execute(
-            "SELECT english, translation, example, category, created_at FROM english_practice ORDER BY id DESC LIMIT ?",
+            "SELECT english, translation, example, category, created_at, phonetic FROM english_practice ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
-        return [{"english": row[0], "translation": row[1], "example": row[2], "category": row[3] or "未分類", "created_at": row[4]} for row in rows]
+        return [{"english": row[0], "translation": row[1], "example": row[2], "category": row[3] or "未分類", "created_at": row[4], "phonetic": row[5] or ""} for row in rows]
     finally:
         connection.close()
 

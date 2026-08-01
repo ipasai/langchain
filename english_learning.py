@@ -3,6 +3,7 @@ import os
 import random
 from datetime import datetime
 import streamlit as st
+import streamlit.components.v1 as components
 from llm_factory import LLMFactory
 from langchain_core.messages import HumanMessage
 from i18n import t
@@ -63,6 +64,220 @@ def _divider() -> None:
     st.markdown(DIVIDER_HTML, unsafe_allow_html=True)
 
 
+# ── TTS 發音按鈕 Component ────────────────────────────────────
+
+def _tts_button_html(word: str, btn_id: str = "tts_btn", size: str = "small") -> str:
+    """產生內嵌 Web Speech API TTS 按鈕的 HTML 字串（直接嵌入 st.markdown）。"""
+    font_size = "0.8rem" if size == "small" else "0.95rem"
+    padding = "0.2rem 0.7rem" if size == "small" else "0.35rem 1rem"
+    word_escaped = word.replace("'", "\\'").replace('"', "&quot;")
+    return (
+        f"<button id='{btn_id}' onclick=\"(function(){{"
+        f"var u=new SpeechSynthesisUtterance('{word_escaped}');"
+        f"u.lang='en-US';u.rate=0.85;"
+        f"window.speechSynthesis.cancel();"
+        f"window.speechSynthesis.speak(u);"
+        f"}})()\" style='background:linear-gradient(135deg,#6366f1,#818cf8);"
+        f"color:#fff;border:none;border-radius:20px;padding:{padding};"
+        f"font-size:{font_size};cursor:pointer;font-weight:600;"
+        f"box-shadow:0 2px 8px rgba(99,102,241,0.25);letter-spacing:0.02em;'>"
+        f"🔊 發音</button>"
+    )
+
+
+def _render_tts_component(word: str, component_key: str = "tts", height: int = 50) -> None:
+    """用 st.components 渲染 TTS 按鈕（獨立 iframe，確保 JS 可執行）。"""
+    word_escaped = word.replace("'", "\\'").replace("`", "\\`").replace('"', "&quot;")
+    html = f"""
+    <button onclick="(function(){{
+        var u=new SpeechSynthesisUtterance('{word_escaped}');
+        u.lang='en-US'; u.rate=0.85;
+        window.parent.speechSynthesis ? window.parent.speechSynthesis.cancel() : window.speechSynthesis.cancel();
+        (window.parent.speechSynthesis || window.speechSynthesis).speak(u);
+    }})()" style="
+        background:linear-gradient(135deg,#6366f1,#818cf8);
+        color:#fff; border:none; border-radius:20px;
+        padding:0.3rem 1rem; font-size:0.88rem;
+        cursor:pointer; font-weight:600;
+        box-shadow:0 2px 8px rgba(99,102,241,0.25);
+    ">🔊 朗讀發音</button>
+    """
+    components.html(html, height=height)
+
+
+# ── 發音測驗 Component ────────────────────────────────────────
+
+def _render_pronunciation_test(word: str, component_key: str = "pron_test") -> None:
+    """渲染發音測驗區塊：TTS 示範 + Web Speech API 錄音辨識 + 比對結果。"""
+    word_escaped = word.replace("'", "\\'").replace("`", "\\`").replace('"', "&quot;")
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {{ margin:0; padding:8px; font-family:'Segoe UI',sans-serif; background:transparent; }}
+  .container {{ background:linear-gradient(135deg,#fefce8,#fef9c3); border:1.5px solid #fcd34d;
+    border-radius:14px; padding:1rem 1.2rem; }}
+  .word-display {{ font-size:1.6rem; font-weight:800; color:#1c1917; margin-bottom:0.3rem; }}
+  .hint {{ font-size:0.82rem; color:#78350f; margin-bottom:0.8rem; }}
+  .btn-row {{ display:flex; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.8rem; }}
+  button {{ border:none; border-radius:20px; padding:0.35rem 1rem; font-size:0.85rem;
+    font-weight:600; cursor:pointer; transition:opacity 0.2s; }}
+  button:hover {{ opacity:0.85; }}
+  #btnDemo {{ background:linear-gradient(135deg,#6366f1,#818cf8); color:#fff; }}
+  #btnRecord {{ background:linear-gradient(135deg,#10b981,#34d399); color:#fff; }}
+  #btnRecord.recording {{ background:linear-gradient(135deg,#ef4444,#f87171); animation:pulse 1s infinite; }}
+  #btnRetry {{ background:#e0e7ff; color:#4338ca; display:none; }}
+  @keyframes pulse {{ 0%,100%{{transform:scale(1)}} 50%{{transform:scale(1.04)}} }}
+  .result-box {{ border-radius:10px; padding:0.6rem 0.9rem; font-size:0.9rem; margin-top:0.4rem; display:none; }}
+  .result-correct {{ background:#dcfce7; border:1.5px solid #86efac; color:#166534; }}
+  .result-partial {{ background:#fef3c7; border:1.5px solid #fcd34d; color:#92400e; }}
+  .result-wrong {{ background:#fee2e2; border:1.5px solid #fca5a5; color:#991b1b; }}
+  .recognized {{ font-size:0.82rem; color:#6b7280; margin-top:0.3rem; }}
+  .score-badge {{ display:inline-block; background:#4f46e5; color:#fff; border-radius:12px;
+    padding:0.1rem 0.6rem; font-size:0.78rem; font-weight:700; margin-left:0.4rem; }}
+  .no-support {{ background:#fee2e2; border:1.5px solid #fca5a5; color:#991b1b;
+    border-radius:10px; padding:0.5rem 0.9rem; font-size:0.85rem; }}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="word-display" id="targetWord">{word_escaped}</div>
+  <div class="hint">📌 先聽示範發音，再點「開始錄音」跟著說出這個單字</div>
+  <div class="btn-row">
+    <button id="btnDemo" onclick="playDemo()">🔊 示範發音</button>
+    <button id="btnRecord" onclick="toggleRecord()">🎤 開始錄音</button>
+    <button id="btnRetry" onclick="retryTest()">🔄 重試</button>
+  </div>
+  <div id="resultBox" class="result-box"></div>
+  <div id="recognizedText" class="recognized"></div>
+  <div id="noSupport" style="display:none" class="no-support">
+    ⚠️ 您的瀏覽器不支援語音辨識，請使用 Chrome 或 Edge。
+  </div>
+</div>
+
+<script>
+const TARGET = '{word_escaped}'.toLowerCase().trim();
+let recognition = null;
+let isRecording = false;
+
+function playDemo() {{
+  var u = new SpeechSynthesisUtterance(TARGET);
+  u.lang = 'en-US'; u.rate = 0.85;
+  (window.parent.speechSynthesis || window.speechSynthesis).speak(u);
+}}
+
+function calcSimilarity(a, b) {{
+  // 簡單字串相似度：Levenshtein 距離
+  a = a.toLowerCase().trim(); b = b.toLowerCase().trim();
+  if (a === b) return 1.0;
+  const la = a.length, lb = b.length;
+  if (!la || !lb) return 0;
+  const dp = Array.from({{length:la+1}}, (_,i) => Array.from({{length:lb+1}}, (_,j) => j===0?i:0));
+  for (let j=1;j<=lb;j++) dp[0][j]=j;
+  for (let i=1;i<=la;i++) for (let j=1;j<=lb;j++) {{
+    dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] :
+      1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  }}
+  return 1 - dp[la][lb] / Math.max(la, lb);
+}}
+
+function showResult(recognizedWords) {{
+  // 比對辨識的每個詞與目標
+  const words = recognizedWords.toLowerCase().trim().split(/\\s+/);
+  let bestScore = 0;
+  let bestWord = '';
+  for (const w of words) {{
+    const score = calcSimilarity(w, TARGET);
+    if (score > bestScore) {{ bestScore = score; bestWord = w; }}
+  }}
+
+  const pct = Math.round(bestScore * 100);
+  const resultBox = document.getElementById('resultBox');
+  const recText = document.getElementById('recognizedText');
+  resultBox.style.display = 'block';
+  recText.style.display = 'block';
+  recText.textContent = '🎧 辨識到：「' + recognizedWords + '」（最佳匹配：' + bestWord + '）';
+
+  if (bestScore >= 0.9) {{
+    resultBox.className = 'result-box result-correct';
+    resultBox.innerHTML = '✅ 發音正確！非常標準！<span class="score-badge">' + pct + ' 分</span>';
+  }} else if (bestScore >= 0.6) {{
+    resultBox.className = 'result-box result-partial';
+    resultBox.innerHTML = '🔶 接近正確，可以再練習。<span class="score-badge">' + pct + ' 分</span><br><small>目標：' + TARGET + '，辨識：' + bestWord + '</small>';
+  }} else {{
+    resultBox.className = 'result-box result-wrong';
+    resultBox.innerHTML = '❌ 發音需要加強，請再試試。<span class="score-badge">' + pct + ' 分</span><br><small>目標：' + TARGET + '，辨識：' + bestWord + '</small>';
+  }}
+  document.getElementById('btnRetry').style.display = 'inline-block';
+}}
+
+function retryTest() {{
+  document.getElementById('resultBox').style.display = 'none';
+  document.getElementById('recognizedText').style.display = 'none';
+  document.getElementById('btnRetry').style.display = 'none';
+}}
+
+function toggleRecord() {{
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {{
+    document.getElementById('noSupport').style.display = 'block';
+    return;
+  }}
+
+  if (isRecording) {{
+    recognition && recognition.stop();
+    return;
+  }}
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 3;
+
+  const btn = document.getElementById('btnRecord');
+  recognition.onstart = function() {{
+    isRecording = true;
+    btn.textContent = '⏹ 停止錄音';
+    btn.classList.add('recording');
+  }};
+  recognition.onend = function() {{
+    isRecording = false;
+    btn.textContent = '🎤 開始錄音';
+    btn.classList.remove('recording');
+  }};
+  recognition.onerror = function(e) {{
+    isRecording = false;
+    btn.textContent = '🎤 開始錄音';
+    btn.classList.remove('recording');
+    if (e.error !== 'aborted') {{
+      document.getElementById('resultBox').style.display = 'block';
+      document.getElementById('resultBox').className = 'result-box result-wrong';
+      document.getElementById('resultBox').textContent = '⚠️ 錄音失敗：' + e.error + '，請確認麥克風權限。';
+    }}
+  }};
+  recognition.onresult = function(event) {{
+    let recognized = '';
+    // 取所有候選結果中最佳匹配
+    let bestScore = 0, bestText = '';
+    for (let i = 0; i < event.results[0].length; i++) {{
+      const txt = event.results[0][i].transcript;
+      const score = calcSimilarity(txt.toLowerCase().trim(), TARGET);
+      if (score > bestScore) {{ bestScore = score; bestText = txt; }}
+      if (i === 0) recognized = txt;
+    }}
+    showResult(bestText || recognized);
+  }};
+  recognition.start();
+}}
+</script>
+</body>
+</html>
+"""
+    components.html(html, height=280, scrolling=False)
+
+
 # ── Helper functions（原有邏輯，完整保留）─────────────────────
 
 def _load_saved_categories(db_path):
@@ -100,6 +315,26 @@ def parse_llm_translation_response(response_text: str):
     if not example and lines and len(lines) > 1:
         example = lines[1]
     return translation, example
+
+
+def parse_llm_phonetic_response(response_text: str) -> str:
+    """從 LLM 回應中解析 IPA 音標（格式：音標：/.../ 或 IPA：/.../）。"""
+    for line in response_text.splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        lower = text.lower()
+        if lower.startswith("音標") or lower.startswith("ipa") or lower.startswith("phonetic"):
+            value = text.split("：", 1)[-1].strip() if "：" in text else text.split(":", 1)[-1].strip()
+            if value:
+                return value.strip()
+        # 直接辨識 /.../ 格式
+        if text.startswith("/") and text.endswith("/"):
+            return text
+        # 辨識 [...]格式
+        if text.startswith("[") and text.endswith("]"):
+            return text
+    return ""
 
 
 def parse_llm_example_sentences(response_text: str):
@@ -252,9 +487,10 @@ def resolve_translation_lookup(query: str, db_path: str = None):
             "translation": record["translation"],
             "example": example_entries[0]["english"] if example_entries else "",
             "examples": example_entries,
+            "phonetic": record.get("phonetic", ""),
             "source": "local",
         }
-    return {"english": query, "translation": "", "example": "", "examples": [], "source": "llm"}
+    return {"english": query, "translation": "", "example": "", "examples": [], "phonetic": "", "source": "llm"}
 
 
 def get_flashcard_display_content(card, display_mode: str):
@@ -319,6 +555,9 @@ class EnglishLearningPage:
             "quiz_answer": None,
             "quiz_result": None,
             "quiz_submitted": False,
+            # 發音測驗
+            "pron_test_word": "",
+            "show_pron_test": False,
         }
         for key, val in defaults.items():
             if key not in st.session_state:
@@ -472,6 +711,14 @@ class EnglishLearningPage:
         _divider()
 
         # ════════════════════════════════════════════════════════
+        # 區塊 5：發音測驗
+        # ════════════════════════════════════════════════════════
+        _section_header("🎤", "發音測驗")
+        self._render_pronunciation_section()
+
+        _divider()
+
+        # ════════════════════════════════════════════════════════
         # 區塊 5：學習成效 & 趨勢
         # ════════════════════════════════════════════════════════
         _section_header("📊", "學習成效與趨勢")
@@ -523,6 +770,14 @@ class EnglishLearningPage:
             front = card["translation"] if st.session_state.flashcard_display_mode == "english" else card["english"]
             badge_color, badge_text = "#10b981", "✓ 答案已顯示"
 
+        # 音標
+        phonetic = card.get("phonetic", "")
+        phonetic_html = (
+            f"<span style='font-size:0.95rem;color:#818cf8;font-family:serif;"
+            f"margin-left:0.5rem;letter-spacing:0.04em;'>{phonetic}</span>"
+            if phonetic else ""
+        )
+
         # 卡片主體
         st.markdown(
             f"<div style='background:linear-gradient(135deg,#f8faff 0%,#e0e7ff 100%);"
@@ -530,12 +785,17 @@ class EnglishLearningPage:
             f"margin:0.6rem 0 0.8rem;box-shadow:0 8px 24px rgba(99,102,241,0.12);'>"
             f"<div style='font-size:0.82rem;color:#818cf8;font-weight:600;letter-spacing:0.05em;'>"
             f"卡片 {index + 1} / {total_cards} &nbsp;·&nbsp; {selected_category}</div>"
-            f"<div style='font-size:2rem;font-weight:800;color:#1e1b4b;margin:0.5rem 0 0.4rem;'>{front}</div>"
+            f"<div style='font-size:2rem;font-weight:800;color:#1e1b4b;margin:0.5rem 0 0.2rem;'>"
+            f"{front}{phonetic_html}</div>"
             f"<span style='background:{badge_color};color:#fff;border-radius:20px;"
             f"padding:0.2rem 0.8rem;font-size:0.78rem;font-weight:600;'>{badge_text}</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
+
+        # TTS 發音按鈕（永遠顯示在卡片下方）
+        tts_word = card["english"]
+        _render_tts_component(tts_word, component_key=f"tts_flash_{index}")
 
         if card.get("example") and revealed:
             st.markdown(
@@ -577,6 +837,23 @@ class EnglishLearningPage:
                     st.session_state.flashcard_revealed = False
                     st.session_state.flashcard_index = (index + 1) % total_cards
                     st.info("已標記需再複習")
+                    st.rerun()
+
+            # 發音測驗快速入口
+            if st.button("🎤 練習此單字發音", use_container_width=True):
+                st.session_state.pron_test_word = card["english"]
+                st.session_state.show_pron_test = True
+                st.rerun()
+
+            if st.session_state.show_pron_test and st.session_state.pron_test_word == card["english"]:
+                st.markdown(
+                    "<div style='font-size:0.9rem;font-weight:600;color:#d97706;margin:0.5rem 0 0.3rem;'>"
+                    "🎤 發音練習</div>",
+                    unsafe_allow_html=True,
+                )
+                _render_pronunciation_test(card["english"], component_key=f"pron_flash_{index}")
+                if st.button("✖ 關閉發音練習", key=f"close_pron_{index}"):
+                    st.session_state.show_pron_test = False
                     st.rerun()
 
         # 收藏
@@ -669,6 +946,7 @@ class EnglishLearningPage:
                     "translation": local["translation"] or "（尚未取得）",
                     "example": local.get("example", ""),
                     "examples": local.get("examples", []),
+                    "phonetic": local.get("phonetic", ""),
                 }
                 st.session_state.example_candidates = local.get("examples", [])
                 st.rerun()
@@ -681,6 +959,7 @@ class EnglishLearningPage:
                         translation = local["translation"]
                         example_entries = local.get("examples", [])
                         first_example = example_entries[0]["english"] if example_entries else local.get("example", "")
+                        phonetic = local.get("phonetic", "")
                     else:
                         llm = LLMFactory.get_llm(
                             st.session_state.provider,
@@ -688,11 +967,17 @@ class EnglishLearningPage:
                             temperature=st.session_state.temperature,
                         )
                         prompt = (
-                            f"請提供英文單字或片語 '{search_query.strip()}' 的中文意思，並附上 3 個自然的英文例句與對應中文翻譯。\n"
-                            "格式：中文意思：...\n例句1：...｜中文：...\n例句2：...｜中文：...\n例句3：...｜中文：..."
+                            f"請提供英文單字或片語 '{search_query.strip()}' 的詳細資訊。\n"
+                            "格式（每行一項，嚴格照此輸出）：\n"
+                            "中文意思：...\n"
+                            "音標：/IPA音標/\n"
+                            "例句1：英文例句｜中文：中文翻譯\n"
+                            "例句2：英文例句｜中文：中文翻譯\n"
+                            "例句3：英文例句｜中文：中文翻譯"
                         )
                         response = llm.invoke([HumanMessage(content=prompt)])
                         translation, _ = parse_llm_translation_response(response.content)
+                        phonetic = parse_llm_phonetic_response(response.content)
                         example_entries = parse_llm_example_items(response.content, fallback_translation=translation)
                         if not example_entries:
                             sents = parse_llm_example_sentences(response.content)
@@ -703,6 +988,7 @@ class EnglishLearningPage:
                         "translation": translation or "（尚未取得）",
                         "example": first_example,
                         "examples": example_entries,
+                        "phonetic": phonetic,
                     }
                     st.session_state.example_candidates = example_entries
                     st.session_state.last_search_query = search_query.strip()
@@ -713,19 +999,36 @@ class EnglishLearningPage:
         if st.session_state.translation_result:
             result = st.session_state.translation_result
 
+            # 音標
+            phonetic = result.get("phonetic", "")
+            phonetic_html = (
+                f" <span style='font-size:1rem;color:#818cf8;font-family:serif;"
+                f"letter-spacing:0.04em;'>{phonetic}</span>"
+                if phonetic else ""
+            )
+
             # 查詢結果卡片
             st.markdown(
                 f"<div style='background:#fff;border:1.5px solid #c7d2fe;border-radius:16px;"
                 f"padding:1.2rem 1.4rem;margin:0.6rem 0;box-shadow:0 4px 14px rgba(99,102,241,0.08);'>"
-                f"<div style='font-size:1.4rem;font-weight:800;color:#1e1b4b;'>{result['english']}</div>"
+                f"<div style='font-size:1.4rem;font-weight:800;color:#1e1b4b;'>"
+                f"{result['english']}{phonetic_html}</div>"
                 f"<div style='font-size:1rem;color:#4b5563;margin-top:0.3rem;'>{result['translation']}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
 
+            # TTS 發音按鈕
+            _render_tts_component(result["english"], component_key="tts_dict")
+
             with st.container():
                 st.text_input("英文", value=result["english"], key="dictionary_english")
-                st.text_area("中文意思", value=result["translation"], key="dictionary_translation", height=70)
+                d_col1, d_col2 = st.columns([3, 2])
+                with d_col1:
+                    st.text_area("中文意思", value=result["translation"], key="dictionary_translation", height=70)
+                with d_col2:
+                    st.text_input("IPA 音標", value=result.get("phonetic", ""), key="dictionary_phonetic",
+                                  placeholder="/rɪˈzɪliəns/")
                 col_ex, col_cht = st.columns(2)
                 with col_ex:
                     st.text_area("主要例句", value=result.get("example", ""), key="dictionary_example", height=80)
@@ -751,7 +1054,7 @@ class EnglishLearningPage:
                         unsafe_allow_html=True,
                     )
 
-            act_col1, act_col2 = st.columns(2)
+            act_col1, act_col2, act_col3 = st.columns(3)
             with act_col1:
                 if st.button("➕ 加入單字本", use_container_width=True, type="primary"):
                     example_entries = merge_example_items(
@@ -766,12 +1069,18 @@ class EnglishLearningPage:
                         serialize_example_items(example_entries),
                         category=st.session_state.selected_category,
                         db_path=st.session_state.db_path,
+                        phonetic=st.session_state.get("dictionary_phonetic", ""),
                     )
                     st.session_state.translation_result["examples"] = example_entries
                     st.session_state.example_candidates = example_entries
                     st.success(f"已加入「{st.session_state.selected_category}」單字本 ✓")
                     st.rerun()
             with act_col2:
+                if st.button("🎤 練習發音", use_container_width=True):
+                    st.session_state.pron_test_word = st.session_state.translation_result["english"]
+                    st.session_state.show_pron_test = True
+                    st.rerun()
+            with act_col3:
                 if st.button("🧠 生成更多例句", use_container_width=True):
                     with st.spinner("AI 生成例句中…"):
                         try:
@@ -803,6 +1112,22 @@ class EnglishLearningPage:
                         except Exception as exc:
                             st.error(f"生成例句失敗：{exc}")
 
+            # 字典查詢發音測驗（由「練習發音」按鈕觸發）
+            if (st.session_state.show_pron_test and
+                    st.session_state.pron_test_word == st.session_state.translation_result.get("english", "")):
+                st.markdown(
+                    "<div style='font-size:0.9rem;font-weight:600;color:#d97706;margin:0.8rem 0 0.3rem;'>"
+                    "🎤 即時發音練習</div>",
+                    unsafe_allow_html=True,
+                )
+                _render_pronunciation_test(
+                    st.session_state.pron_test_word,
+                    component_key="pron_dict",
+                )
+                if st.button("✖ 關閉", key="close_pron_dict"):
+                    st.session_state.show_pron_test = False
+                    st.rerun()
+
         # 手動新增表單
         st.markdown(
             "<div style='font-size:0.85rem;font-weight:600;color:#6366f1;margin:1rem 0 0.3rem;'>✏️ 手動新增單字</div>",
@@ -823,12 +1148,20 @@ class EnglishLearningPage:
             with f2:
                 translation_phrase = st.text_input("中文說明", placeholder="韌性、恢復力",
                                                    value=(st.session_state.translation_result or {}).get("translation", ""))
-            g1, g2 = st.columns(2)
-            with g1:
+            ph_col, ex_col = st.columns(2)
+            with ph_col:
+                phonetic_manual = st.text_input(
+                    "IPA 音標（選填）", placeholder="/rɪˈzɪliəns/",
+                    value=(st.session_state.translation_result or {}).get("phonetic", "")
+                )
+            with ex_col:
                 example_sentence = st.text_input("例句", placeholder="She showed great resilience.",
                                                  value=(st.session_state.translation_result or {}).get("example", ""))
-            with g2:
+            g1, g2 = st.columns(2)
+            with g1:
                 example_translation = st.text_input("例句中文翻譯", placeholder="她展現了極大的韌性。")
+            with g2:
+                pass  # 預留空間
             if st.form_submit_button("💾 儲存單字", use_container_width=True):
                 if english_phrase.strip():
                     ex_items = [{"english": example_sentence.strip(),
@@ -838,6 +1171,7 @@ class EnglishLearningPage:
                         serialize_example_items(ex_items),
                         category=selected_save_cat,
                         db_path=st.session_state.db_path,
+                        phonetic=phonetic_manual.strip(),
                     )
                     st.session_state.selected_category = selected_save_cat
                     st.success("✅ 已儲存到本機資料庫")
@@ -889,6 +1223,51 @@ class EnglishLearningPage:
                 st.session_state.quiz_result = None
                 st.session_state.quiz_submitted = False
                 st.rerun()
+
+    # ── 發音測驗區塊 ────────────────────────────────────────────
+    def _render_pronunciation_section(self):
+        practice_items = list_english_practice_items(limit=100, db_path=st.session_state.db_path)
+        st.caption("選擇單字，聽示範發音後跟著朗讀，系統自動比對並給分（需 Chrome / Edge，且允許麥克風）。")
+
+        col_word, col_random = st.columns([4, 1])
+        with col_word:
+            word_options = [item["english"] for item in practice_items] if practice_items else []
+            if word_options:
+                # 預設選取 pron_test_word（若存在）
+                default_idx = 0
+                if st.session_state.pron_test_word in word_options:
+                    default_idx = word_options.index(st.session_state.pron_test_word)
+                selected_word = st.selectbox(
+                    "選擇要練習的單字",
+                    options=word_options,
+                    index=default_idx,
+                    key="pron_word_select",
+                )
+            else:
+                selected_word = st.text_input("輸入要練習的單字", value="hello", key="pron_word_input")
+        with col_random:
+            st.markdown("<div style='height:1.8rem;'></div>", unsafe_allow_html=True)
+            if st.button("🎲 隨機", use_container_width=True) and word_options:
+                selected_word = random.choice(word_options)
+                st.session_state.pron_test_word = selected_word
+                st.rerun()
+
+        # 顯示音標
+        phonetic = ""
+        if practice_items:
+            matched = next((item for item in practice_items if item["english"] == selected_word), None)
+            if matched:
+                phonetic = matched.get("phonetic", "")
+        if phonetic:
+            st.markdown(
+                f"<span style='font-size:1rem;color:#818cf8;font-family:serif;"
+                f"background:#eef2ff;border-radius:8px;padding:0.2rem 0.7rem;"
+                f"letter-spacing:0.04em;'>{phonetic}</span>",
+                unsafe_allow_html=True,
+            )
+
+        if selected_word:
+            _render_pronunciation_test(selected_word, component_key="pron_main")
 
     # ── 學習成效 & 趨勢區塊 ─────────────────────────────────────
     def _render_stats_section(self):
