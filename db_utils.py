@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 from datetime import datetime
@@ -65,9 +66,11 @@ def ensure_local_memory_database(db_path: Optional[str] = None) -> str:
                 doc_type TEXT NOT NULL DEFAULT 'knowledge',
                 summary TEXT,
                 mindmap_json TEXT,
+                content_text TEXT,
                 created_at TEXT NOT NULL
             )"""
         )
+        _ensure_table_column(connection, "rag_documents", "content_text", "TEXT")
         # ── RAG 問答紀錄 / 知識強化表 ─────────────────────────────
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS rag_knowledge (
@@ -872,6 +875,7 @@ def save_rag_document(
     doc_type: str = "knowledge",
     summary: str = "",
     mindmap_json: str = "",
+    content_text: str = "",
     db_path: Optional[str] = None,
 ) -> int:
     """儲存 RAG 文件索引，回傳 doc_id。若已存在（hash 相同）則更新。"""
@@ -884,15 +888,15 @@ def save_rag_document(
         ).fetchone()
         if existing:
             connection.execute(
-                "UPDATE rag_documents SET chunk_count=?, summary=?, mindmap_json=?, created_at=? WHERE id=?",
-                (chunk_count, summary, mindmap_json, now, existing[0]),
+                "UPDATE rag_documents SET chunk_count=?, summary=?, mindmap_json=?, content_text=?, created_at=? WHERE id=?",
+                (chunk_count, summary, mindmap_json, content_text, now, existing[0]),
             )
             connection.commit()
             return existing[0]
         cursor = connection.execute(
-            "INSERT INTO rag_documents (filename, file_type, content_hash, chunk_count, doc_type, summary, mindmap_json, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (filename, file_type, content_hash, chunk_count, doc_type, summary, mindmap_json, now),
+            "INSERT INTO rag_documents (filename, file_type, content_hash, chunk_count, doc_type, summary, mindmap_json, content_text, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (filename, file_type, content_hash, chunk_count, doc_type, summary, mindmap_json, content_text, now),
         )
         connection.commit()
         return cursor.lastrowid
@@ -906,7 +910,7 @@ def list_rag_documents(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     connection = sqlite3.connect(db_path)
     try:
         rows = connection.execute(
-            "SELECT id, filename, file_type, doc_type, chunk_count, summary, mindmap_json, created_at "
+            "SELECT id, filename, file_type, doc_type, chunk_count, summary, mindmap_json, content_text, created_at "
             "FROM rag_documents ORDER BY id DESC"
         ).fetchall()
         return [
@@ -914,7 +918,8 @@ def list_rag_documents(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
                 "id": r[0], "filename": r[1], "file_type": r[2],
                 "doc_type": r[3], "chunk_count": r[4],
                 "summary": r[5] or "", "mindmap_json": r[6] or "",
-                "created_at": r[7],
+                "content_text": r[7] or "",
+                "created_at": r[8],
             }
             for r in rows
         ]

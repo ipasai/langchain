@@ -11,6 +11,7 @@ doc_analyzer.py
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -97,6 +98,31 @@ def _get_llm():
         model_name=st.session_state.model,
         temperature=0.4,
     )
+
+
+def get_upload_signature(upload: Any, file_bytes: Optional[bytes] = None) -> str:
+    """建立可用來比對同一份上傳檔案的識別字串。"""
+    if upload is None:
+        return ""
+    name = getattr(upload, 'name', '') or ''
+    size = getattr(upload, 'size', 0) or 0
+    if file_bytes is None:
+        return f"{name}:{size}"
+    digest = hashlib.sha256(file_bytes).hexdigest()[:16]
+    return f"{name}:{size}:{digest}"
+
+
+def should_process_upload(upload_signature: str, state: Optional[Dict[str, Any]] = None) -> bool:
+    """判斷目前是否應執行上傳檔案分析。"""
+    if not upload_signature:
+        return False
+
+    state = state or st.session_state
+    pending_signature = state.get("doc_pending_upload_signature")
+    if pending_signature == upload_signature:
+        return True
+
+    return False
 
 
 def _tts_component(text: str, height: int = 60) -> None:
@@ -415,6 +441,9 @@ class DocAnalyzerPage:
             "doc_rag_answer": "",
             "doc_rag_question": "",
             "doc_tab": "upload",
+            "doc_is_processing": False,
+            "doc_pending_upload_signature": None,
+            "doc_last_processed_signature": None,
             # 題庫測驗狀態
             "bank_quiz_questions": [],
             "bank_quiz_answers": {},
@@ -459,6 +488,7 @@ class DocAnalyzerPage:
         if uploaded:
             file_bytes = uploaded.read()
             filename = uploaded.name
+            upload_signature = get_upload_signature(uploaded, file_bytes)
 
             col_info, col_btn = st.columns([3, 1])
             with col_info:
@@ -474,23 +504,31 @@ class DocAnalyzerPage:
                     "🚀 開始分析",
                     type="primary",
                     use_container_width=True,
-                    disabled=st.session_state.is_processing,
+                    disabled=st.session_state.get("doc_is_processing", False),
                 )
 
             if do_analyze:
-                st.session_state.is_processing = True
-                st.rerun()
+                if st.session_state.get("doc_last_processed_signature") == upload_signature:
+                    st.info("此檔案已完成分析，請上傳新的檔案或直接查看結果。")
+                else:
+                    st.session_state.doc_is_processing = True
+                    st.session_state.doc_pending_upload_signature = upload_signature
+                    st.rerun()
 
-            if st.session_state.is_processing and uploaded:
+            if should_process_upload(upload_signature, st.session_state):
                 with st.spinner("讀取文件內容…"):
                     try:
                         text = extract_text_from_file(file_bytes, filename)
                     except Exception as e:
                         st.error(f"❌ 讀取失敗：{e}")
+                        st.session_state.doc_is_processing = False
+                        st.session_state.doc_pending_upload_signature = None
                         return
 
                 if not text.strip():
                     st.warning("⚠️ 文件內容為空，請確認檔案格式是否正確。")
+                    st.session_state.doc_is_processing = False
+                    st.session_state.doc_pending_upload_signature = None
                     return
 
                 content_hash = compute_hash(text)
@@ -502,6 +540,8 @@ class DocAnalyzerPage:
                         mindmap = _ai_mindmap(text, filename)
                     except Exception as e:
                         st.error(f"❌ AI 分析失敗：{e}")
+                        st.session_state.doc_is_processing = False
+                        st.session_state.doc_pending_upload_signature = None
                         return
 
                 with st.spinner("向量化並建立知識庫…"):
@@ -515,11 +555,14 @@ class DocAnalyzerPage:
                             doc_type=doc_type,
                             summary=summary,
                             mindmap_json=mindmap,
+                            content_text=text,
                             db_path=st.session_state.db_path,
                         )
                         indexed = index_document(doc_id, filename, chunks)
                     except Exception as e:
                         st.error(f"❌ 向量化失敗：{e}")
+                        st.session_state.doc_is_processing = False
+                        st.session_state.doc_pending_upload_signature = None
                         return
 
                 # 儲存到 session
@@ -534,6 +577,9 @@ class DocAnalyzerPage:
                 st.session_state.doc_quiz_answers = {}
                 st.session_state.doc_quiz_submitted = False
                 st.session_state.doc_quiz_score = None
+                st.session_state.doc_last_processed_signature = upload_signature
+                st.session_state.doc_is_processing = False
+                st.session_state.doc_pending_upload_signature = None
 
                 st.success(f"✅ 分析完成！已建立 {indexed} 個知識向量塊。")
                 st.rerun()
@@ -597,7 +643,7 @@ class DocAnalyzerPage:
                         st.session_state.doc_summary = doc["summary"]
                         st.session_state.doc_mindmap = doc["mindmap_json"]
                         st.session_state.doc_type = doc["doc_type"]
-                        st.session_state.doc_text = ""
+                        st.session_state.doc_text = doc.get("content_text", "")
                         st.session_state.doc_knowledge_points = []
                         st.session_state.doc_quiz_questions = []
                         st.session_state.doc_quiz_answers = {}

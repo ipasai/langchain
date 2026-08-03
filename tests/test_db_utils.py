@@ -2,7 +2,19 @@ import os
 import tempfile
 import unittest
 
-from db_utils import DBType, analyze_database, connect_database, delete_row, execute_sql_query, get_table_columns, insert_row, update_row
+from db_utils import (
+    DBType,
+    analyze_database,
+    connect_database,
+    delete_row,
+    execute_sql_query,
+    get_table_columns,
+    insert_row,
+    list_rag_documents,
+    save_quiz_bank_questions,
+    save_rag_document,
+    update_row,
+)
 
 
 class ExecuteSqlQueryTests(unittest.TestCase):
@@ -61,6 +73,37 @@ class ExecuteSqlQueryTests(unittest.TestCase):
         self.assertIn("orders", table_map)
         self.assertTrue(table_map["users"].get("purpose", "").startswith(("使用者", "會員")))
         self.assertTrue(any(rel.get("to_table") == "users" for rel in table_map["orders"].get("relationships", [])))
+
+    def test_save_quiz_bank_questions_serializes_options(self):
+        questions = [{
+            "question": "哪一個是 Python 的資料結構？",
+            "options": ["A. list", "B. int", "C. bool", "D. str"],
+            "answer": "A",
+            "explanation": "list 是可變序列",
+        }]
+
+        count = save_quiz_bank_questions("sample_set", questions, filename="demo.txt", db_path=self.db_path)
+        self.assertEqual(count, 1)
+
+        rows = execute_sql_query(DBType.SQLITE, self.config, "SELECT options_json FROM quiz_bank")
+        self.assertEqual(rows["rows"][0][0], '["A. list", "B. int", "C. bool", "D. str"]')
+
+    def test_save_rag_document_persists_source_content(self):
+        doc_id = save_rag_document(
+            filename="example.txt",
+            file_type="txt",
+            content_hash="hash-123",
+            chunk_count=2,
+            summary="摘要",
+            mindmap_json="mindmap",
+            content_text="原始文件內容",
+            db_path=self.db_path,
+        )
+
+        self.assertGreater(doc_id, 0)
+        docs = list_rag_documents(db_path=self.db_path)
+        self.assertEqual(docs[0]["filename"], "example.txt")
+        self.assertEqual(docs[0]["content_text"], "原始文件內容")
 
 
 if __name__ == "__main__":

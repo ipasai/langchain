@@ -29,6 +29,7 @@ try:
         resolve_translation_lookup,
         _load_saved_categories,
     )
+    from data_analysis_page import DataAnalysisPage
     STREAMLIT_AVAILABLE = True
 except ImportError:
     STREAMLIT_AVAILABLE = False
@@ -145,10 +146,14 @@ def initialize_session_state():
         st.session_state.favorite_cards = []
     if "db_source_signature" not in st.session_state:
         st.session_state.db_source_signature = None
-    # ── 全域處理中旗標（防止按鈕重複點擊）────────────────────────
     if "is_processing" not in st.session_state:
         st.session_state.is_processing = False
-    # ── 智慧文件分析模組 ─────────────────────────────────────────
+    if "doc_is_processing" not in st.session_state:
+        st.session_state.doc_is_processing = False
+    if "doc_pending_upload_signature" not in st.session_state:
+        st.session_state.doc_pending_upload_signature = None
+    if "doc_last_processed_signature" not in st.session_state:
+        st.session_state.doc_last_processed_signature = None
     if "doc_text" not in st.session_state:
         st.session_state.doc_text = ""
     if "doc_filename" not in st.session_state:
@@ -182,21 +187,33 @@ def main():
         sidebar = Sidebar()
         sidebar.render()
 
-    tab_chat, tab_db, tab_english, tab_doc = st.tabs([
-        t("chat_tab_title"), t("db_management"), t("english_learning_tab"), "📄 智慧文件分析"
+    tab_chat, tab_db, tab_english, tab_doc, tab_data = st.tabs([
+        t("chat_tab_title"),
+        t("db_management"),
+        t("english_learning_tab"),
+        "📄 智慧文件分析",
+        "📊 資料分析"
     ])
+
     with tab_chat:
         chat_page = ChatPage()
         chat_page.render()
+
     with tab_db:
         db_page = DatabasePage()
         db_page.render()
+
     with tab_english:
         english_page = EnglishLearningPage()
         english_page.render()
+
     with tab_doc:
         doc_page = DocAnalyzerPage()
         doc_page.render()
+
+    with tab_data:
+        data_page = DataAnalysisPage()
+        data_page.render()
 
 
 if __name__ == "__main__":

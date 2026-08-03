@@ -1,0 +1,38 @@
+[
+  {
+    "file_name": "台灣電力公司113年度鄉鎮市別用電統計資料.csv",
+    "file_path": "temp_uploads/台灣電力公司113年度鄉鎮市別用電統計資料.csv",
+    "x_col": "年度",
+    "y_col": null,
+    "chart_type": "histogram",
+    "saved_path": "charts/台灣電力公司113年度鄉鎮市別用電統計資料_histogram.png",
+    "created_at": "2026-08-03 15:11:52"
+  },
+  {
+    "file_name": "農產品交易行情.json",
+    "file_path": "temp_uploads/農產品交易行情.json",
+    "x_col": "交易日期",
+    "y_col": null,
+    "chart_type": "histogram",
+    "saved_path": "charts/農產品交易行情_histogram.png",
+    "created_at": "2026-08-03 15:27:14"
+  },
+  {
+    "file_name": "農產品交易行情.json",
+    "file_path": "temp_uploads/農產品交易行情.json",
+    "x_col": "交易日期",
+    "y_col": null,
+    "chart_type": "histogram",
+    "saved_path": "charts/農產品交易行情_histogram_rerun.png",
+    "created_at": "2026-08-03 15:28:32"
+  },
+  {
+    "file_name": "農產品交易行情.json",
+    "file_path": "temp_uploads/農產品交易行情.json",
+    "x_col": "交易日期",
+    "y_col": null,
+    "chart_type": "histogram",
+    "saved_path": "charts/農產品交易行情_histogram.png",
+    "created_at": "2026-08-03 15:29:36"
+  }
+]
