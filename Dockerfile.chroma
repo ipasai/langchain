@@ -1,0 +1,7 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements-chroma.txt /app/requirements-chroma.txt
+RUN pip install --no-cache-dir -r /app/requirements-chroma.txt
+COPY . /app
+EXPOSE 8001
+CMD ["uvicorn", "chroma_server:app", "--host", "0.0.0.0", "--port", "8001"]

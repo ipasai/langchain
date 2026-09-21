@@ -1,0 +1,85 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: |
+          cd web
+          npm ci
+      - name: Run unit tests
+        run: |
+          cd web
+          npm test
+      - name: Run Playwright tests
+        run: |
+          cd web
+          npx playwright test || true
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.node-version }}-
+      - name: Setup Python for Chroma
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install Chroma server deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-chroma.txt
+      - name: Start local Chroma server
+        run: |
+          nohup uvicorn chroma_server:app --host 127.0.0.1 --port 8001 &
+          sleep 2
+      - name: Import documents into Chroma
+        run: |
+          python scripts/import_to_chroma.py || true
+      - name: Install deps
+        working-directory: ./web
+        run: npm ci
+      - name: Build
+        working-directory: ./web
+        run: npm run build
+      - name: Start server
+        working-directory: ./web
+        run: npm run start & npx wait-on http://localhost:3000
+      - name: Install Playwright browsers
+        working-directory: ./web
+        run: npx playwright install --with-deps
+      - name: Run unit tests
+        working-directory: ./web
+        run: npm test
+      - name: Run e2e
+        working-directory: ./web
+        run: npx playwright test --reporter=github

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "1789809046739",
+    "filename": "hello.txt",
+    "path": "/Users/autoclaw/Documents/langchain/data/uploads/1789809046738_hello.txt",
+    "extracted": "hello world",
+    "indexed": false,
+    "created_at": "2026-09-19T09:10:46.739Z"
+  },
+  {
+    "id": "1789869578540",
+    "filename": "hello.txt",
+    "path": "/Users/autoclaw/Documents/langchain/data/uploads/1789869578537_hello.txt",
+    "extracted": "hello world",
+    "indexed": false,
+    "created_at": "2026-09-20T01:59:38.540Z"
+  },
+  {
+    "id": "1789869635759",
+    "filename": "hello.txt",
+    "path": "/Users/autoclaw/Documents/langchain/data/uploads/1789869635757_hello.txt",
+    "extracted": "hello world",
+    "indexed": false,
+    "created_at": "2026-09-20T02:00:35.759Z"
+  },
+  {
+    "id": "1789869676060",
+    "filename": "hello.txt",
+    "path": "/Users/autoclaw/Documents/langchain/data/uploads/1789869676058_hello.txt",
+    "extracted": "hello world",
+    "indexed": false,
+    "created_at": "2026-09-20T02:01:16.060Z"
+  },
+  {
+    "id": "1789869781176",
+    "filename": "hello.txt",
+    "path": "/Users/autoclaw/Documents/langchain/data/uploads/1789869781173_hello.txt",
+    "extracted": "hello world",
+    "indexed": false,
+    "created_at": "2026-09-20T02:03:01.176Z"
+  },
+  {
+    "id": "1789870233997",
+    "filename": "hello.txt",
+    "path": "/Users/autoclaw/Documents/langchain/data/uploads/1789870233985_hello.txt",
+    "extracted": "hello world",
+    "indexed": false,
+    "created_at": "2026-09-20T02:10:33.997Z"
+  }
+]

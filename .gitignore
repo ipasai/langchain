@@ -7,5 +7,3 @@
 .env
 .venv
 __pycache__/
-.vscode/
-settings.json

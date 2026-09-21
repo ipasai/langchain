@@ -1,0 +1,3086 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 LangChain 多模型 PyScript 應用</title>
+    
+    <!-- Google Fonts Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- PyScript CSS & JS (Release 2024.1.1) -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
+    <style>
+        :root {
+            --bg-base: #09070f;
+            --bg-surface: rgba(255, 255, 255, 0.03);
+            --border-glow: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --color-indigo: #6366f1;
+            --color-purple: #a855f7;
+            --color-emerald: #10b981;
+            --color-crimson: #ef4444;
+            --color-amber: #f59e0b;
+            --gradient-accent: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: linear-gradient(135deg, #09070f 0%, #120e29 50%, #09070f 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        /* Loading Screen overlay */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: #09070f;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.8s ease;
+        }
+
+        .loader-spinner {
+            width: 70px;
+            height: 70px;
+            border: 6px solid rgba(168, 85, 247, 0.1);
+            border-top: 6px solid #a855f7;
+            border-radius: 50%;
+            animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            filter: drop-shadow(0 0 15px rgba(168, 85, 247, 0.6));
+            margin-bottom: 25px;
+        }
+
+        .loader-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        /* Layout Structure */
+        #app-container {
+            display: flex;
+            width: 100vw;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        /* Sidebar Container */
+        #sidebar {
+            width: 320px;
+            background: rgba(13, 10, 25, 0.65);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-glow);
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            overflow-y: auto;
+        }
+
+        .sidebar-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .sidebar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .section-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Custom Inputs & Selects */
+        select, input[type="text"], input[type="password"], textarea, input[type="number"] {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            outline: none;
+            transition: var(--transition-smooth);
+        }
+
+        select:focus, input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+            border-color: var(--color-purple);
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        option {
+            background: #120e29;
+            color: var(--text-primary);
+        }
+
+        /* Slider Styles */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--color-purple);
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
+            transition: var(--transition-smooth);
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .slider-value-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        /* Info boxes */
+        .info-card {
+            background: rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .info-card strong {
+            color: var(--color-indigo);
+        }
+
+        /* Main Workspace Panel */
+        #main-workspace {
+            flex-grow: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        /* Custom Tabs navigation */
+        #tabs-header {
+            display: flex;
+            gap: 15px;
+            border-bottom: 1px solid var(--border-glow);
+            padding-bottom: 15px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .tab-btn.active {
+            color: var(--text-primary);
+            background: var(--gradient-accent);
+            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.35);
+        }
+
+        /* Content Panels */
+        .tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 25px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Heading Style */
+        .page-title-row {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        /* Glass Cards */
+        .glass-card {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glow);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .glass-card-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Buttons Styling */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: var(--gradient-accent);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.35);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--color-crimson);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* AI Chat Interface */
+        #chat-messages-container {
+            height: 400px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.03);
+        }
+
+        .chat-message {
+            display: flex;
+            gap: 15px;
+            max-width: 85%;
+            padding: 14px 18px;
+            border-radius: 16px;
+            font-size: 0.98rem;
+            line-height: 1.5;
+        }
+
+        .chat-message.user {
+            align-self: flex-end;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            flex-direction: row-reverse;
+        }
+
+        .chat-message.assistant {
+            align-self: flex-start;
+            background: rgba(168, 85, 247, 0.12);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+        }
+
+        .chat-message .avatar {
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+        }
+
+        .chat-message .message-content {
+            flex-grow: 1;
+            white-space: pre-wrap;
+        }
+
+        #chat-input-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        #chat-input-prompt {
+            flex-grow: 1;
+            resize: none;
+            height: 50px;
+            padding: 14px;
+        }
+
+        /* Database Tab Styling */
+        .db-config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+        }
+
+        /* SQL Suggestion Code Box */
+        .code-box-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-glow);
+            border-bottom: none;
+            border-radius: 12px 12px 0 0;
+            padding: 10px 15px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        pre code {
+            display: block;
+            background: #06040a;
+            border: 1px solid var(--border-glow);
+            border-radius: 0 0 12px 12px;
+            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--color-emerald);
+            overflow-x: auto;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        /* Interactive DB Tables */
+        .db-table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--border-glow);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: rgba(255,255,255,0.04);
+            color: var(--text-primary);
+            font-weight: 600;
+            padding: 12px 16px;
+            border-bottom: 2px solid var(--border-glow);
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-primary);
+        }
+
+        /* English Practice Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glow);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            transition: var(--transition-smooth);
+        }
+
+        .metric-card:hover {
+            border-color: var(--color-purple);
+            background: rgba(168, 85, 247, 0.04);
+            transform: translateY(-2px);
+        }
+
+        .metric-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            background: var(--gradient-accent);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-top: 5px;
+        }
+
+        .metric-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* Flippable Vocabulary Card */
+        #flashcard-perspective {
+            perspective: 1000px;
+            width: 100%;
+            height: 240px;
+            cursor: pointer;
+        }
+
+        #flashcard-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+
+        #flashcard-perspective.flipped #flashcard-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        .card-front {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
+            border: 2px solid var(--color-indigo);
+        }
+
+        .card-back {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%);
+            border: 2px solid var(--color-emerald);
+            transform: rotateY(180deg);
+        }
+
+        .card-header-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .card-word-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .card-tip-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 20px;
+        }
+
+        /* TOEFL Quiz radio list */
+        .quiz-option-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .quiz-option-label {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-glow);
+            border-radius: 10px;
+            padding: 14px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: var(--transition-smooth);
+        }
+
+        .quiz-option-label:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: var(--color-purple);
+        }
+
+        .quiz-option-label.selected {
+            background: rgba(168, 85, 247, 0.1);
+            border-color: var(--color-purple);
+            color: #fff;
+        }
+
+        .quiz-option-label input[type="radio"] {
+            accent-color: var(--color-purple);
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Toast notification */
+        .toast-notify {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: rgba(16, 185, 129, 0.9);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+            z-index: 99999;
+            transform: translateY(150px);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .toast-notify.show {
+            transform: translateY(0);
+        }
+
+        /* Spinner loading in-progress styles */
+        .spinner-inline {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top: 2px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        .spinner-block {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        
+        .spinner-block-icon {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(168, 85, 247, 0.2);
+            border-top: 3px solid var(--color-purple);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading overlay screen -->
+    <div id="loading-overlay">
+        <div class="loader-spinner"></div>
+        <div class="loader-text">Loading PyScript WebAssembly Runtime...</div>
+    </div>
+
+    <!-- Toast message -->
+    <div id="toast-message" class="toast-notify">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="toast-text">成功！</span>
+    </div>
+
+    <div id="app-container">
+        
+        <!-- Sidebar config panel -->
+        <div id="sidebar">
+            <div class="sidebar-title">
+                <i class="fa-solid fa-robot"></i> PyScript AI Workspace
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="section-label">語言 / Language</div>
+                <select id="ui-locale">
+                    <option value="zh-tw">繁體中文</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="section-label" id="lbl-provider">選擇 AI 模型提供者</div>
+                <select id="ai-provider">
+                    <option value="ollama">Ollama (本地)</option>
+                    <option value="openai">OpenAI (雲端)</option>
+                    <option value="google">Google Gemini (雲端)</option>
+                </select>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="section-label" id="lbl-model">選擇 AI 模型</div>
+                <select id="ai-model">
+                    <!-- Loaded dynamically in python -->
+                </select>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="slider-value-container">
+                    <div class="section-label" id="lbl-temp">溫度 (Temperature)</div>
+                    <span id="temp-val-display" style="font-weight: 700; color: var(--color-purple);">0.7</span>
+                </div>
+                <input type="range" id="ai-temp" min="0" max="1" step="0.1" value="0.7">
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="section-label" id="lbl-persona">選擇 AI 角色 (Persona)</div>
+                <select id="ai-persona">
+                    <option value="General Assistant">通用助理 (General Assistant)</option>
+                    <option value="Coding Expert">程式專家 (Coding Expert)</option>
+                    <option value="Database Expert">資料庫專家 (Database Expert)</option>
+                    <option value="English Tutor">英文導師 (English Tutor)</option>
+                    <option value="Custom Prompt">自訂角色 (Custom Prompt)</option>
+                </select>
+            </div>
+            
+            <div class="sidebar-section" id="custom-prompt-container" style="display: none;">
+                <div class="section-label">自訂 System Prompt</div>
+                <textarea id="ai-custom-prompt" rows="3">你是一個 AI 助理。</textarea>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="section-label" id="lbl-db-type">選擇資料庫類型</div>
+                <select id="db-type-select">
+                    <option value="sqlite">SQLITE</option>
+                    <option value="mysql">MYSQL</option>
+                    <option value="postgres">POSTGRES</option>
+                    <option value="mariadb">MARIADB</option>
+                    <option value="redis">REDIS</option>
+                    <option value="mongodb">MONGODB</option>
+                </select>
+            </div>
+
+            <!-- Current Settings Summary Box -->
+            <div class="sidebar-section" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-glow); padding: 14px; border-radius: 14px; font-size: 0.88rem; line-height: 1.7;">
+                <div style="font-weight: 700; color: var(--color-purple); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-clipboard-list"></i> 📋 目前配置摘要
+                </div>
+                <div><strong>提供者:</strong> <span id="summary-provider" style="color:var(--color-indigo); font-weight: 600;">OLLAMA</span></div>
+                <div><strong>模型:</strong> <code id="summary-model" style="color:#e2e8f0; font-family: monospace;">llama3</code></div>
+                <div><strong>建議用途:</strong> <span id="summary-rec" style="color:var(--text-secondary);">通用 AI 任務</span></div>
+                <div><strong>溫度 (Temp):</strong> <span id="summary-temp" style="color:var(--color-amber); font-weight: 600;">0.7</span></div>
+                <div><strong>資料庫連線:</strong> <span style="color:var(--color-emerald); font-weight: 600;">SQLITE (WASM)</span></div>
+            </div>
+
+            <button class="btn btn-danger" id="btn-clear-history-sidebar">
+                <i class="fa-solid fa-trash-can"></i> <span id="lbl-clear-history">清除對話歷史</span>
+            </button>
+        </div>
+
+        <!-- Main Content Panel -->
+        <div id="main-workspace">
+            
+            <!-- App Header Row -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h1 class="page-title-row" id="lbl-app-title" style="margin-bottom: 0;">LangChain 多模型交互式應用</h1>
+                <a href="APP_FEATURES_PRESENTATION.html" target="_blank" class="btn btn-secondary" style="display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 0.9rem; padding: 8px 16px; border-radius: 10px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); color: #c7d2fe;">
+                    <i class="fa-solid fa-file-powerpoint" style="color: #a855f7;"></i> 📊 查看功能簡報 Slide Deck
+                </a>
+            </div>
+
+            <!-- Tab Buttons -->
+            <div id="tabs-header">
+                <button class="tab-btn active" data-tab="tab-chat" id="btn-tab-chat">
+                    <i class="fa-solid fa-comments"></i> 💬 AI 對話
+                </button>
+                <button class="tab-btn" data-tab="tab-db" id="btn-tab-db">
+                    <i class="fa-solid fa-database"></i> 🗄️ 資料庫管理
+                </button>
+                <button class="tab-btn" data-tab="tab-english" id="btn-tab-english">
+                    <i class="fa-solid fa-book-open"></i> 📘 英文學習
+                </button>
+            </div>
+
+            <!-- 1. AI Chat Tab -->
+            <div id="tab-chat" class="tab-content active">
+                <div class="glass-card">
+                    <div class="glass-card-title" id="lbl-chat-title">
+                        <i class="fa-solid fa-comments" style="color: var(--color-purple);"></i> 💬 AI 對話
+                    </div>
+                    
+                    <div id="chat-messages-container">
+                        <!-- Messages dynamically added -->
+                    </div>
+                    
+                    <div id="chat-input-row">
+                        <textarea id="chat-input-prompt" placeholder="請輸入您想詢問 AI 的問題或任務..."></textarea>
+                        <button class="btn btn-primary" id="btn-send-chat">
+                            <i class="fa-solid fa-paper-plane"></i> <span id="lbl-submit">送出</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Database Manager Tab -->
+            <div id="tab-db" class="tab-content">
+                <div class="glass-card">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-network-wired" style="color: var(--color-indigo);"></i> <span id="lbl-db-title-panel">資料庫設定與連線</span>
+                    </div>
+                    
+                    <!-- Dynamic configs grid -->
+                    <div class="db-config-grid" id="db-config-inputs">
+                        <!-- Populated by python based on DB type -->
+                    </div>
+                    
+                    <button class="btn btn-primary" id="btn-test-db">
+                        <i class="fa-solid fa-plug"></i> <span id="lbl-test-connection">🔍 測試資料庫連線</span>
+                    </button>
+                    
+                    <div id="db-connection-status-message"></div>
+                </div>
+
+                <div class="glass-card" id="db-analysis-card" style="display: none;">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-chart-pie" style="color: var(--color-emerald);"></i> <span id="lbl-analysis-results">📊 資料庫分析結果</span>
+                    </div>
+                    <div id="db-analysis-content">
+                        <!-- Populated by python -->
+                    </div>
+                </div>
+
+                <div class="glass-card" id="db-ops-card" style="display: none;">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-gears" style="color: var(--color-amber);"></i> <span id="lbl-basic-ops">🧰 基本資料庫操作</span>
+                    </div>
+
+                    <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                        <div style="flex-grow: 1; min-width: 200px;">
+                            <label class="section-label" id="lbl-select-table">選擇資料表</label>
+                            <select id="db-table-select"></select>
+                        </div>
+                        <button class="btn btn-secondary" id="btn-db-table-preview">預覽</button>
+                        <button class="btn btn-secondary" id="btn-db-table-reload">🔄 重新載入</button>
+                    </div>
+
+                    <div>
+                        <label class="section-label" id="lbl-sql-query">執行 SQL 查詢</label>
+                        <textarea id="db-sql-query" rows="4" placeholder="例如: SELECT * FROM users LIMIT 10;"></textarea>
+                    </div>
+                    
+                    <button class="btn btn-primary" id="btn-db-run-sql">▶️ 執行 SQL</button>
+                    
+                    <!-- Paged query results table -->
+                    <div id="db-query-results-panel" style="display: none; flex-direction: column; gap: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <span id="db-query-result-count" style="font-size: 0.9rem; color: var(--text-secondary);">查詢結果</span>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <label style="font-size: 0.85rem; color: var(--text-secondary);">頁數</label>
+                                <select id="db-query-result-page" style="width: auto; padding: 6px 12px;"></select>
+                                <button class="btn btn-secondary" id="btn-db-download-csv" style="padding: 6px 14px;">⬇️ 下載 CSV</button>
+                            </div>
+                        </div>
+                        
+                        <div class="db-table-wrapper" id="db-query-result-table-container"></div>
+                        
+                        <!-- Single row delete tool -->
+                        <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 10px; background: rgba(0,0,0,0.15); padding: 15px; border-radius: 12px;">
+                            <div style="flex-grow: 1; min-width: 200px;">
+                                <label class="section-label">選擇欲刪除之資料列</label>
+                                <select id="db-delete-row-select"></select>
+                            </div>
+                            <button class="btn btn-danger" id="btn-db-delete-row">🗑️ 刪除單筆</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- SQL generator AI tool -->
+                <div class="glass-card" id="db-sql-generator-card" style="display: none;">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--color-purple);"></i> <span id="lbl-sql-gen-title">🧠 自然語言轉 SQL 查詢</span>
+                    </div>
+                    
+                    <div>
+                        <label class="section-label" id="lbl-sql-desc">請輸入要查詢資料庫的敘述</label>
+                        <textarea id="db-sql-desc" rows="3" placeholder="例如: 查詢最新 10 筆學習英文單字紀錄"></textarea>
+                    </div>
+                    
+                    <button class="btn btn-primary" id="btn-db-generate-sql">🧾 生成 SQL 語法</button>
+                    
+                    <div id="db-generated-sql-container" style="display: none;">
+                        <div class="code-box-header">建議 SQL</div>
+                        <pre><code id="db-generated-sql-code">SELECT * FROM ...</code></pre>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button class="btn btn-secondary" id="btn-db-copy-sql" style="padding: 6px 14px; font-size: 0.85rem;"><i class="fa-solid fa-copy"></i> 複製 SQL</button>
+                            <button class="btn btn-primary" id="btn-db-apply-sql" style="padding: 6px 14px; font-size: 0.85rem;"><i class="fa-solid fa-play"></i> 填入並執行此 SQL</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. English Practice Tab -->
+            <div id="tab-english" class="tab-content">
+                
+                <!-- Metrics cards summary row -->
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">單字數量</div>
+                        <div class="metric-value" id="metric-word-count">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">測驗次數</div>
+                        <div class="metric-value" id="metric-quiz-count">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">最近準確率</div>
+                        <div class="metric-value" id="metric-accuracy">0%</div>
+                    </div>
+                </div>
+
+                <!-- Daily review card -->
+                <div class="glass-card" id="review-reminder-panel">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-calendar-check" style="color: var(--color-amber);"></i> 📅 每日學習複習提醒
+                    </div>
+                    <div id="review-reminder-msg" style="font-size: 0.95rem; line-height: 1.5;"></div>
+                    <button class="btn btn-primary" id="btn-mark-review-completed">🗓️ 標記今日複習完成</button>
+                </div>
+
+                <!-- AI generator form -->
+                <div class="glass-card">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-bolt-lightning" style="color: var(--color-purple);"></i> 🧠 AI 一鍵生成生字集 (AI Auto-Vocabulary)
+                    </div>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary);">選擇您想學習的主題與級別，由 AI 自動為您生成單字並匯入本機字庫，免去手動輸入！</p>
+                    
+                    <div class="db-config-grid">
+                        <div>
+                            <label class="section-label">選擇學習主題</label>
+                            <select id="vocab-gen-theme">
+                                <option value="TOEFL 核心字彙">TOEFL 核心字彙</option>
+                                <option value="IELTS 雅思字彙">IELTS 雅思字彙</option>
+                                <option value="生活常用英文">生活常用英文</option>
+                                <option value="職場商務英文">職場商務英文</option>
+                                <option value="旅遊情境英文">旅遊情境英文</option>
+                                <option value="科技資訊英文">科技資訊英文</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="section-label">選擇字彙難度</label>
+                            <select id="vocab-gen-level">
+                                <option value="初級 (Basic)">初級 (Basic)</option>
+                                <option value="中級 (Intermediate)">中級 (Intermediate)</option>
+                                <option value="高級 (Advanced)">高級 (Advanced)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="section-label">生成數量</label>
+                            <input type="number" id="vocab-gen-count" min="3" max="15" value="5">
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" id="btn-vocab-auto-generate">⚡ 開始生成並自動匯入</button>
+                </div>
+
+                <!-- Card flipping component -->
+                <div class="glass-card">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-rectangle-ad" style="color: var(--color-indigo);"></i> 🃏 單字卡片模式
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div style="display: flex; gap: 15px; align-items: center;">
+                            <label class="section-label" style="margin-bottom: 0;">單字本分類</label>
+                            <select id="vocab-card-category-select" style="width: auto; padding: 6px 12px;"></select>
+                        </div>
+                        <div style="display: flex; gap: 15px; align-items: center;">
+                            <label class="section-label" style="margin-bottom: 0;">顯示方向</label>
+                            <div style="display: flex; gap: 10px; font-size: 0.9rem;">
+                                <label><input type="radio" name="display-direction" value="english" checked> 英文</label>
+                                <label><input type="radio" name="display-direction" value="chinese"> 中文</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Flip Card Container -->
+                    <div id="flashcard-perspective">
+                        <div id="flashcard-inner">
+                            <div class="card-face card-front">
+                                <span class="card-header-label" id="card-index-label">卡片 1/1</span>
+                                <div class="card-word-title" id="card-front-word">hello</div>
+                                <span class="card-tip-text">點擊卡片顯示答案</span>
+                            </div>
+                            <div class="card-face card-back">
+                                <span class="card-header-label">中文翻譯與例句</span>
+                                <div class="card-word-title" style="font-size: 1.8rem;" id="card-back-translation">你好</div>
+                                <p style="margin-top: 15px; font-size: 0.95rem; color: var(--text-primary); text-align: center;" id="card-back-example"></p>
+                                <span class="card-tip-text">點擊卡片翻回正面</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <button class="btn btn-secondary" id="btn-card-prev"><i class="fa-solid fa-arrow-left"></i> 上一張</button>
+                        <button class="btn btn-primary" id="btn-card-reveal">👁️ 顯示答案</button>
+                        <button class="btn btn-secondary" id="btn-card-next">下一張 <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+
+                    <div style="display: flex; gap: 15px; justify-content: center; margin-top: 5px;" id="card-remember-row">
+                        <button class="btn btn-secondary" id="btn-card-remember" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: var(--color-emerald);">✅ 還記得</button>
+                        <button class="btn btn-secondary" id="btn-card-review-need" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: var(--color-crimson);">❌ 再複習</button>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-glow); padding-top: 15px;">
+                        <button class="btn btn-secondary" id="btn-card-favorite"><i class="fa-solid fa-star"></i> 收藏</button>
+                        <button class="btn btn-secondary" id="btn-card-collect-cat">收藏到分類</button>
+                    </div>
+                </div>
+
+                <!-- Dict lookup tool -->
+                <div class="glass-card">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-magnifying-glass" style="color: var(--color-emerald);"></i> 📖 字典式查詢
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <input type="text" id="dict-search-input" placeholder="搜尋英文或中文，例如: hello 或 你好" style="flex-grow: 1;">
+                        <button class="btn btn-primary" id="btn-dict-search">🔍 查詢翻譯</button>
+                    </div>
+
+                    <div id="dict-search-result-panel" style="display: none; background: rgba(0,0,0,0.15); padding: 20px; border-radius: 15px; border: 1px solid var(--border-glow); flex-direction: column; gap: 15px;">
+                        <h4 style="font-family: 'Outfit', sans-serif; font-size: 1.1rem; color: var(--color-indigo);">查詢結果</h4>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                            <div>
+                                <label class="section-label">英文</label>
+                                <input type="text" id="dict-res-english">
+                            </div>
+                            <div>
+                                <label class="section-label">中文說明</label>
+                                <input type="text" id="dict-res-translation">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="section-label">主要例句</label>
+                            <textarea id="dict-res-example" rows="2"></textarea>
+                        </div>
+                        <div>
+                            <label class="section-label">例句中文翻譯</label>
+                            <input type="text" id="dict-res-example-trans">
+                        </div>
+
+                        <div id="dict-additional-examples-container" style="display: none; flex-direction: column; gap: 8px;">
+                            <label class="section-label">例句與中文翻譯</label>
+                            <div id="dict-additional-examples-list" style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 5px;"></div>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" id="btn-dict-save-word">➕ 加入單字本</button>
+                            <button class="btn btn-secondary" id="btn-dict-gen-examples">🧠 生成多個例句</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add single vocabulary card form -->
+                <div class="glass-card">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-plus" style="color: var(--color-emerald);"></i> 💾 新增單字與翻譯
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                        <div>
+                            <label class="section-label">選擇保存分類</label>
+                            <select id="vocab-add-category-select"></select>
+                        </div>
+                        <div>
+                            <label class="section-label">英文單字或片語</label>
+                            <input type="text" id="vocab-add-english" placeholder="Hello">
+                        </div>
+                        <div>
+                            <label class="section-label">中文意思說明</label>
+                            <input type="text" id="vocab-add-translation" placeholder="你好">
+                        </div>
+                        <div>
+                            <label class="section-label">例句</label>
+                            <input type="text" id="vocab-add-example" placeholder="Hello, world!">
+                        </div>
+                        <div style="grid-column: span 2;">
+                            <label class="section-label">例句中文翻譯</label>
+                            <input type="text" id="vocab-add-example-trans" placeholder="哈囉，世界！">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" id="btn-vocab-save-single">💾 儲存翻譯</button>
+                </div>
+
+                <!-- Category management -->
+                <div class="glass-card">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-folder-plus" style="color: var(--color-indigo);"></i> 🗂️ 管理分類
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <input type="text" id="cat-add-input" placeholder="新增分類名稱，例如: TOEFL" style="flex-grow: 1;">
+                        <button class="btn btn-primary" id="btn-cat-add">新增分類</button>
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                        目前分類：<span id="cat-list-labels" style="color: var(--color-purple); font-weight: 600;">未分類</span>
+                    </div>
+
+                    <!-- Category items table view -->
+                    <div style="border-top: 1px solid var(--border-glow); padding-top: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <label class="section-label">查看分類單字清單</label>
+                            <select id="cat-view-list-select" style="width: auto; padding: 6px 12px;"></select>
+                        </div>
+                        <div class="db-table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>英文</th>
+                                        <th>中文翻譯</th>
+                                        <th>例句說明</th>
+                                        <th style="width: 80px; text-align: center;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cat-words-tbody-list">
+                                    <!-- Populated by python -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TOEFL style quiz -->
+                <div class="glass-card">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-feather" style="color: var(--color-purple);"></i> 🧪 TOEFL 風格測驗
+                    </div>
+
+                    <div id="quiz-question-container" style="background: rgba(0,0,0,0.15); padding: 25px; border-radius: 15px; border: 1px solid var(--border-glow);">
+                        <p style="font-size: 1.15rem; font-weight: 600; margin-bottom: 15px;" id="quiz-question-text">請選擇最適合的中文意思：</p>
+                        
+                        <div class="quiz-option-container" id="quiz-options-list">
+                            <!-- Radio button items -->
+                        </div>
+                        
+                        <div id="quiz-result-feedback" style="display: none; padding: 10px 15px; border-radius: 8px; margin-top: 15px; font-weight: 600;"></div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-primary" id="btn-quiz-submit">提交答案</button>
+                        <button class="btn btn-secondary" id="btn-quiz-next" style="display: none;">下一題</button>
+                    </div>
+                </div>
+
+                <!-- Learning charts trends -->
+                <div class="glass-card">
+                    <div class="glass-card-title">
+                        <i class="fa-solid fa-chart-line" style="color: var(--color-emerald);"></i> 📊 學習成效與趨勢
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+                        <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 15px; border: 1px solid var(--border-glow);">
+                            <canvas id="accuracy-chart-canvas"></canvas>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 15px; border: 1px solid var(--border-glow);">
+                            <canvas id="count-chart-canvas"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="db-table-wrapper" style="margin-top: 15px;">
+                        <table id="study-trend-dataframe">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>答對題數</th>
+                                    <th>總題數</th>
+                                    <th>準確率</th>
+                                </tr>
+                            </thead>
+                            <tbody id="study-trend-tbody">
+                                <!-- Populated by python -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- JS Charts Bridge Logic -->
+    <script>
+        let accuracyChart = null;
+        let countChart = null;
+
+        window.updateCharts = function(datesList, accuraciesList, countsList) {
+            const accCtx = document.getElementById('accuracy-chart-canvas').getContext('2d');
+            const countCtx = document.getElementById('count-chart-canvas').getContext('2d');
+
+            const dates = Array.from(datesList);
+            const accuracies = Array.from(accuraciesList).map(Number);
+            const counts = Array.from(countsList).map(Number);
+
+            if (accuracyChart) accuracyChart.destroy();
+            if (countChart) countChart.destroy();
+
+            accuracyChart = new Chart(accCtx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: '每日複習準確率',
+                        data: accuracies,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                        tension: 0.3,
+                        fill: true,
+                        pointBackgroundColor: '#6366f1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { labels: { color: '#f8fafc', font: { family: 'Inter' } } } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#94a3b8' }, min: 0, max: 1.0 }
+                    }
+                }
+            });
+
+            countChart = new Chart(countCtx, {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: '每日題數',
+                        data: counts,
+                        backgroundColor: '#a855f7',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { labels: { color: '#f8fafc', font: { family: 'Inter' } } } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#94a3b8' }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+        
+        // Helper to trigger file download
+        window.downloadFile = function(filename, content, mime) {
+            const blob = new Blob([content], { type: mime });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+
+    <!-- Python PyScript Code block -->
+    <script type="py">
+        import sqlite3
+        import json
+        import os
+        import random
+        import asyncio
+        from datetime import datetime
+        import js
+        from pyodide.http import pyfetch
+        from pyodide.ffi import create_proxy
+
+        # Global database cursor
+        conn = None
+        cursor = None
+
+        # ----------------------------------------------------
+        # Database Initialization
+        # ----------------------------------------------------
+        def init_local_db():
+            global conn, cursor
+            conn = sqlite3.connect("app_memory.db")
+            cursor = conn.cursor()
+            
+            # Setup tables
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS english_practice (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                english TEXT NOT NULL,
+                translation TEXT NOT NULL,
+                example TEXT,
+                category TEXT,
+                created_at TEXT NOT NULL
+            )
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS study_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_type TEXT NOT NULL,
+                score INTEGER NOT NULL,
+                total INTEGER NOT NULL,
+                accuracy REAL NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS daily_review (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                review_date TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """)
+            conn.commit()
+
+            # Insert default vocabulary records if empty
+            cursor.execute("SELECT COUNT(*) FROM english_practice")
+            if cursor.fetchone()[0] == 0:
+                defaults = [
+                    ("hello", "你好", "Hello, how are you?｜哈囉，你好嗎？", "生活常用英文", datetime.utcnow().isoformat()),
+                    ("world", "世界", "It is a beautiful world.｜這是一個美麗的世界。", "生活常用英文", datetime.utcnow().isoformat()),
+                    ("database", "資料庫", "We store data in a database.｜我們將資料儲存在資料庫中。", "科技資訊英文", datetime.utcnow().isoformat()),
+                    ("learning", "學習", "Learning English is fun.｜學習英文很有趣。", "生活常用英文", datetime.utcnow().isoformat()),
+                    ("factory", "工廠", "The factory produces cars.｜這家工廠製造汽車。", "生活常用英文", datetime.utcnow().isoformat())
+                ]
+                cursor.executemany("INSERT INTO english_practice (english, translation, example, category, created_at) VALUES (?,?,?,?,?)", defaults)
+                conn.commit()
+
+        # ----------------------------------------------------
+        # Configurations & Translations
+        # ----------------------------------------------------
+        TRANSLATIONS = {
+            "page_title": {"zh-tw": "🤖 LangChain 多模型應用", "en": "🤖 LangChain Multi-Model Application"},
+            "app_title": {"zh-tw": "LangChain 多模型交互式應用", "en": "LangChain Multi-Model Interactive Application"},
+            "language_label": {"zh-tw": "語言", "en": "Language"},
+            "provider_label": {"zh-tw": "選擇 AI 模型提供者", "en": "Select AI Model Provider"},
+            "temperature_label": {"zh-tw": "溫度 (Temperature)", "en": "Temperature"},
+            "temperature_help": {"zh-tw": "可直接調整本次對話的創意度，預設會套用 .env 的 TEMPERATURE。", "en": "Adjust the creativity of this chat directly; it defaults to the TEMPERATURE value in .env."},
+            "clear_history": {"zh-tw": "清除對話歷史", "en": "Clear chat history"},
+            "chat_tab_title": {"zh-tw": "💬 AI 對話", "en": "💬 AI Chat"},
+            "chat_welcome": {"zh-tw": "👋 歡迎使用 LangChain 多模型應用！\n\n請在下方輸入您的提示詞開始與 AI 互動。", "en": "👋 Welcome to the LangChain multi-model app!\n\nType your prompt below to start chatting."},
+            "prompt_placeholder": {"zh-tw": "請輸入您想詢問 AI 的問題或任務...", "en": "Describe the question or task you want the AI to handle..."},
+            "submit": {"zh-tw": "送出", "en": "Send"},
+            "db_management": {"zh-tw": "🗄️ 資料庫管理", "en": "🗄️ Database Management"},
+            "db_type_label": {"zh-tw": "選擇資料庫類型", "en": "Select database type"},
+            "sqlite_path": {"zh-tw": "SQLite 檔案路徑", "en": "SQLite file path"},
+            "host_label": {"zh-tw": "主機 (host)", "en": "Host"},
+            "port_label": {"zh-tw": "連接埠 (port)", "en": "Port"},
+            "username_label": {"zh-tw": "使用者", "en": "User"},
+            "password_label": {"zh-tw": "密碼", "en": "Password"},
+            "database_name_label": {"zh-tw": "資料庫名稱", "en": "Database name"},
+            "test_connection": {"zh-tw": "🔍 測試資料庫連線", "en": "🔍 Test database connection"},
+            "analysis_results": {"zh-tw": "📊 資料庫分析結果", "en": "📊 Database analysis results"},
+            "basic_operations": {"zh-tw": "🧰 基本資料庫操作", "en": "🧰 Basic database operations"},
+            "table_label": {"zh-tw": "資料表", "en": "Table"},
+            "purpose_label": {"zh-tw": "用途", "en": "Purpose"},
+            "row_count_label": {"zh-tw": "列數", "en": "Row count"},
+            "columns_label": {"zh-tw": "欄位", "en": "Columns"},
+            "sql_query_label": {"zh-tw": "執行 SQL 查詢", "en": "Run SQL query"},
+            "sql_generation_title": {"zh-tw": "🧠 自然語言轉 SQL 查詢", "en": "🧠 Natural language to SQL"},
+            "sql_description_label": {"zh-tw": "請輸入要查詢資料庫的敘述，例如: 查詢最新 10 筆使用者資料", "en": "Describe the database query you want, for example: show the latest 10 users"},
+            "suggested_sql": {"zh-tw": "建議 SQL", "en": "Suggested SQL"}
+        }
+
+        def t(key):
+            locale = js.document.getElementById("ui-locale").value
+            translations = TRANSLATIONS.get(key, {})
+            if locale in translations:
+                return translations[locale]
+            return translations.get("zh-tw", key)
+
+        # Update language-specific labels in DOM
+        def update_language_labels():
+            js.document.getElementById("lbl-app-title").innerText = t("app_title")
+            js.document.getElementById("lbl-provider").innerText = t("provider_label")
+            js.document.getElementById("lbl-temp").innerText = t("temperature_label")
+            js.document.getElementById("lbl-clear-history").innerText = t("clear_history")
+            js.document.getElementById("lbl-chat-title").innerHTML = '<i class="fa-solid fa-comments" style="color: var(--color-purple);"></i> ' + t("chat_tab_title")
+            js.document.getElementById("chat-input-prompt").placeholder = t("prompt_placeholder")
+            js.document.getElementById("lbl-submit").innerText = t("submit")
+            js.document.getElementById("lbl-db-title-panel").innerText = t("db_management")
+            js.document.getElementById("lbl-test-connection").innerText = t("test_connection")
+            js.document.getElementById("lbl-analysis-results").innerText = t("analysis_results")
+            js.document.getElementById("lbl-basic-ops").innerText = t("basic_operations")
+            js.document.getElementById("lbl-select-table").innerText = t("table_label")
+            js.document.getElementById("lbl-sql-query").innerText = t("sql_query_label")
+            js.document.getElementById("lbl-sql-gen-title").innerText = t("sql_generation_title")
+            js.document.getElementById("lbl-sql-desc").innerText = t("sql_description_label")
+
+        # ----------------------------------------------------
+        # Async fetch helper for Env files & API requests
+        # ----------------------------------------------------
+        async def load_env():
+            try:
+                response = await pyfetch(".env")
+                if response.status == 200:
+                    content = await response.string()
+                    for line in content.splitlines():
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            # Strip quotes
+                            v = v.strip().strip("'").strip('"')
+                            os.environ[k.strip()] = v
+                    print("Successfully loaded .env config!")
+            except Exception as e:
+                print("Skipping loading local .env configuration (or file not found):", e)
+
+        # ----------------------------------------------------
+        # Model Selection Config mappings
+        # ----------------------------------------------------
+        AVAILABLE_MODELS = {
+            "ollama": ["llama3", "qwen2.5-coder:1.5b", "mistral", "neural-chat", "dolphin-mixtral"],
+            "openai": ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"],
+            "google": ["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+        }
+
+        async def fetch_ollama_models():
+            try:
+                base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+                url = f"{base_url.rstrip('/')}/api/tags"
+                res = await pyfetch(url)
+                if res.status == 200:
+                    data = await res.json()
+                    names = [m.get("name") for m in data.get("models", []) if m.get("name")]
+                    if names:
+                        return names
+            except Exception:
+                pass
+            return AVAILABLE_MODELS["ollama"]
+
+        def update_summary_card(event=None):
+            provider = js.document.getElementById("ai-provider").value
+            model_el = js.document.getElementById("ai-model")
+            model = model_el.value if model_el else ""
+            temp = js.document.getElementById("ai-temp").value
+            
+            js.document.getElementById("summary-provider").innerText = provider.upper()
+            js.document.getElementById("summary-model").innerText = model or "無"
+            js.document.getElementById("summary-temp").innerText = str(temp)
+            
+            rec = "通用 AI 任務"
+            m_lower = (model or "").lower()
+            if "coder" in m_lower or "code" in m_lower:
+                rec = "程式開發 / 代碼補全"
+            elif "gemini-2.5-flash" in m_lower or "gpt-4o-mini" in m_lower:
+                rec = "推薦：快速對話 / 綜合性價比"
+            elif "gemini-1.5-pro" in m_lower or "gpt-4o" in m_lower:
+                rec = "推薦：高級推理 / 程式 / 邏輯"
+            elif "deepseek" in m_lower:
+                rec = "推薦：深度推理 / 複雜邏輯"
+            js.document.getElementById("summary-rec").innerText = rec
+
+        async def populate_models_dropdown(event=None):
+            provider = js.document.getElementById("ai-provider").value
+            models_dropdown = js.document.getElementById("ai-model")
+            models_dropdown.innerHTML = ""
+            
+            if provider == "ollama":
+                models = await fetch_ollama_models()
+            else:
+                models = AVAILABLE_MODELS.get(provider, [])
+                
+            for m in models:
+                opt = js.document.createElement("option")
+                opt.value = m
+                recommendation = "通用 AI 任務"
+                m_lower = m.lower()
+                if "coder" in m_lower or "code" in m_lower:
+                    recommendation = "程式開發 / 代碼補全"
+                elif "gemini-2.5-flash" in m_lower or "gpt-4o-mini" in m_lower:
+                    recommendation = "推薦：快速對話 / 綜合性價比"
+                elif "gemini-1.5-pro" in m_lower or "gpt-4o" in m_lower:
+                    recommendation = "推薦：高級推理 / 程式 / 邏輯"
+                elif "deepseek" in m_lower:
+                    recommendation = "推薦：深度推理 / 複雜邏輯"
+                opt.innerText = f"{m} ({recommendation})"
+                models_dropdown.appendChild(opt)
+                
+            update_summary_card()
+
+        # ----------------------------------------------------
+        # Async AI LLM Call Handler
+        # ----------------------------------------------------
+        async def call_llm(provider, model, temperature, system_prompt, prompt, history=[]):
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            for h in history:
+                messages.append({"role": h["role"], "content": h["content"]})
+            messages.append({"role": "user", "content": prompt})
+
+            if provider == "openai":
+                api_key = os.getenv("OPENAI_API_KEY", "")
+                if not api_key or api_key == "your_openai_api_key_here":
+                    raise ValueError("錯誤: 請在您的 .env 檔案中填寫正確的 OPENAI_API_KEY")
+                
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                payload = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": float(temperature)
+                }
+                response = await pyfetch("https://api.openai.com/v1/chat/completions", 
+                                          method="POST", 
+                                          headers=headers, 
+                                          body=json.dumps(payload))
+                if response.status != 200:
+                    err_msg = await response.string()
+                    raise Exception(f"HTTP {response.status}: {err_msg}")
+                data = await response.json()
+                return data["choices"][0]["message"]["content"]
+                
+            elif provider == "google":
+                api_key = os.getenv("GOOGLE_API_KEY", "")
+                if not api_key or api_key == "your_google_ai_studio_api_key_here":
+                    raise ValueError("錯誤: 請在您的 .env 檔案中填寫正確的 GOOGLE_API_KEY")
+                
+                contents = []
+                for m in messages:
+                    if m["role"] == "system":
+                        continue
+                    role = "user" if m["role"] == "user" else "model"
+                    contents.append({"role": role, "parts": [{"text": m["content"]}]})
+                
+                payload = {
+                    "contents": contents,
+                    "generationConfig": {
+                        "temperature": float(temperature)
+                    }
+                }
+                if system_prompt:
+                    payload["systemInstruction"] = {
+                        "parts": [{"text": system_prompt}]
+                    }
+                    
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+                response = await pyfetch(url, 
+                                          method="POST", 
+                                          headers={"Content-Type": "application/json"}, 
+                                          body=json.dumps(payload))
+                if response.status != 200:
+                    err_msg = await response.string()
+                    raise Exception(f"HTTP {response.status}: {err_msg}")
+                data = await response.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+                
+            else: # ollama (local)
+                base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+                url = f"{base_url.rstrip('/')}/api/chat"
+                
+                ollama_msgs = []
+                for m in messages:
+                    role = "assistant" if m["role"] == "assistant" else m["role"]
+                    ollama_msgs.append({"role": role, "content": m["content"]})
+                    
+                payload = {
+                    "model": model,
+                    "messages": ollama_msgs,
+                    "options": {
+                        "temperature": float(temperature)
+                    },
+                    "stream": False
+                }
+                try:
+                    response = await pyfetch(url, 
+                                              method="POST", 
+                                              headers={"Content-Type": "application/json"}, 
+                                              body=json.dumps(payload))
+                    if response.status != 200:
+                        raise Exception(f"Ollama returned HTTP {response.status}")
+                    data = await response.json()
+                    return data["message"]["content"]
+                except Exception as e:
+                    raise Exception(f"本地 Ollama 連線失敗！請確保 Ollama 服務已啟動且模型已下載 ({e})")
+
+        # ----------------------------------------------------
+        # Helper Toast notification
+        # ----------------------------------------------------
+        def show_toast(text, is_success=True):
+            toast = js.document.getElementById("toast-message")
+            toast_text = js.document.getElementById("toast-text")
+            toast_text.innerText = text
+            
+            if is_success:
+                toast.style.background = "rgba(16, 185, 129, 0.9)"
+                toast.style.borderColor = "rgba(16, 185, 129, 0.4)"
+                toast.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + text
+            else:
+                toast.style.background = "rgba(239, 68, 68, 0.9)"
+                toast.style.borderColor = "rgba(239, 68, 68, 0.4)"
+                toast.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + text
+
+            toast.classList.add("show")
+            
+            # Dismiss toast after 3 seconds
+            async def hide_later():
+                await asyncio.sleep(3.0)
+                toast.classList.remove("show")
+            asyncio.ensure_future(hide_later())
+
+        # ----------------------------------------------------
+        # Tab Navigation Logic
+        # ----------------------------------------------------
+        def setup_tabs():
+            tab_btns = js.document.querySelectorAll(".tab-btn")
+            
+            def handle_tab_click(event):
+                # Deactivate all
+                for btn in tab_btns:
+                    btn.classList.remove("active")
+                    content_id = btn.getAttribute("data-tab")
+                    js.document.getElementById(content_id).classList.remove("active")
+                
+                # Activate clicked
+                clicked_btn = event.currentTarget
+                clicked_btn.classList.add("active")
+                active_content_id = clicked_btn.getAttribute("data-tab")
+                js.document.getElementById(active_content_id).classList.add("active")
+                
+                # If entering English Practice tab, refresh statistics and charts
+                if active_content_id == "tab-english":
+                    refresh_english_practice_metrics()
+                    draw_study_charts()
+
+            for btn in tab_btns:
+                btn.addEventListener("click", create_proxy(handle_tab_click))
+
+        # ----------------------------------------------------
+        # Tab 1: AI Chat logic
+        # ----------------------------------------------------
+        def refresh_chat_messages_ui():
+            container = js.document.getElementById("chat-messages-container")
+            container.innerHTML = ""
+            
+            cursor.execute("SELECT role, content FROM chat_history ORDER BY id ASC")
+            messages = cursor.fetchall()
+            
+            if not messages:
+                container.innerHTML = f'<div style="text-align:center; padding:30px; color:var(--text-secondary); line-height:1.6;">{t("chat_welcome")}</div>'
+                return
+                
+            for role, content in messages:
+                msg_div = js.document.createElement("div")
+                msg_div.className = f"chat-message {role}"
+                avatar = "👤" if role == "user" else "🤖"
+                msg_div.innerHTML = f'<div class="avatar">{avatar}</div><div class="message-content"></div>'
+                msg_div.querySelector(".message-content").innerText = content
+                container.appendChild(msg_div)
+            
+            container.scrollTop = container.scrollHeight
+
+        async def send_chat_message(event):
+            input_el = js.document.getElementById("chat-input-prompt")
+            prompt = input_el.value.strip()
+            if not prompt:
+                return
+            
+            # Save User Message to DB
+            cursor.execute("INSERT INTO chat_history (role, content, created_at) VALUES (?,?,?)", 
+                           ("user", prompt, datetime.utcnow().isoformat()))
+            conn.commit()
+            input_el.value = ""
+            refresh_chat_messages_ui()
+            
+            # Setup loading state
+            container = js.document.getElementById("chat-messages-container")
+            loading_div = js.document.createElement("div")
+            loading_div.className = "chat-message assistant"
+            loading_div.innerHTML = '<div class="avatar">🤖</div><div class="message-content"><div class="spinner-inline"></div> 思考中...</div>'
+            container.appendChild(loading_div)
+            container.scrollTop = container.scrollHeight
+            
+            # Get current settings
+            provider = js.document.getElementById("ai-provider").value
+            model = js.document.getElementById("ai-model").value
+            temp = js.document.getElementById("ai-temp").value
+            
+            persona = js.document.getElementById("ai-persona").value
+            if persona == "Custom Prompt":
+                system_prompt = js.document.getElementById("ai-custom-prompt").value
+            else:
+                persona_prompts = {
+                    "General Assistant": "你是一個親切且專業的 AI 助理，請用繁體中文回答問題。",
+                    "Coding Expert": "你是一位精通軟體開發與系統架構的程式專家。請提供乾淨、高效且有詳細註解的程式碼，並使用繁體中文解釋。",
+                    "Database Expert": "你是一位世界級資料庫專家(Database Expert)，精通 SQL、MySQL、PostgreSQL、SQL Server、Oracle、SQLite、MariaDB、MongoDB、Redis 與資料庫架構設計。請協助使用者設計資料模型、ERD、正規化/反正規化、SQL 查詢、Stored Procedure、Trigger、View、Function、Index、Partition、Transaction、Lock、Isolation Level、Execution Plan、Query Optimization、Replication、Backup/Restore、HA、Sharding、資料遷移與效能調校。回答時請提供完整 SQL 範例、最佳實務、可能的效能瓶頸及改善建議，並使用繁體中文說明。",
+                    "English Tutor": "You are an encouraging and professional English tutor. Help the user learn English by correcting grammar, explaining vocabulary, and providing natural example sentences. Respond in Traditional Chinese with English explanations."
+                }
+                system_prompt = persona_prompts.get(persona, "")
+
+            # Load history context from database
+            cursor.execute("SELECT role, content FROM chat_history ORDER BY id DESC LIMIT 10")
+            recent_rows = cursor.fetchall()
+            history = []
+            for r in reversed(recent_rows[:-1]): # exclude current prompt which is already added
+                history.append({"role": r[0], "content": r[1]})
+
+            try:
+                response = await call_llm(provider, model, temp, system_prompt, prompt, history)
+                # Remove loading card and save assistant reply
+                loading_div.remove()
+                cursor.execute("INSERT INTO chat_history (role, content, created_at) VALUES (?,?,?)", 
+                               ("assistant", response, datetime.utcnow().isoformat()))
+                conn.commit()
+                refresh_chat_messages_ui()
+            except Exception as e:
+                loading_div.remove()
+                err_div = js.document.createElement("div")
+                err_div.className = "chat-message assistant"
+                err_div.style.border = "1px solid rgba(239, 68, 68, 0.4)"
+                err_div.style.background = "rgba(239, 68, 68, 0.1)"
+                err_div.innerHTML = f'<div class="avatar">❌</div><div class="message-content" style="color:var(--color-crimson);"><strong>Error:</strong> {str(e)}</div>'
+                container.appendChild(err_div)
+                container.scrollTop = container.scrollHeight
+
+        def clear_chat_history(event):
+            cursor.execute("DELETE FROM chat_history")
+            conn.commit()
+            refresh_chat_messages_ui()
+            show_toast("已清除對話歷史紀錄")
+
+        # ----------------------------------------------------
+        # Tab 2: Database Management logic
+        # ----------------------------------------------------
+        def render_db_config_fields(event=None):
+            db_type = js.document.getElementById("db-type-select").value
+            container = js.document.getElementById("db-config-inputs")
+            container.innerHTML = ""
+            
+            # Hide output panels when DB type changes
+            js.document.getElementById("db-analysis-card").style.display = "none"
+            js.document.getElementById("db-ops-card").style.display = "none"
+            js.document.getElementById("db-sql-generator-card").style.display = "none"
+
+            if db_type == "sqlite":
+                container.innerHTML = """
+                <div style="grid-column: span 2;">
+                    <label class="section-label">SQLite 檔案路徑</label>
+                    <input type="text" id="db-sqlite-path" value="sample.db" placeholder="例如: sample.db">
+                </div>
+                """
+            elif db_type in ["mysql", "postgres", "mariadb"]:
+                port_defaults = {"mysql": "3306", "postgres": "5432", "mariadb": "3306"}
+                container.innerHTML = f"""
+                <div>
+                    <label class="section-label">主機 (Host)</label>
+                    <input type="text" id="db-host" value="localhost">
+                </div>
+                <div>
+                    <label class="section-label">連接埠 (Port)</label>
+                    <input type="text" id="db-port" value="{port_defaults[db_type]}">
+                </div>
+                <div>
+                    <label class="section-label">使用者</label>
+                    <input type="text" id="db-user" value="root">
+                </div>
+                <div>
+                    <label class="section-label">密碼</label>
+                    <input type="password" id="db-pass" placeholder="請輸入密碼">
+                </div>
+                <div style="grid-column: span 2;">
+                    <label class="section-label">資料庫名稱</label>
+                    <input type="text" id="db-database" placeholder="例如: test_db">
+                </div>
+                """
+            elif db_type == "redis":
+                container.innerHTML = """
+                <div>
+                    <label class="section-label">主機 (Host)</label>
+                    <input type="text" id="db-host" value="localhost">
+                </div>
+                <div>
+                    <label class="section-label">連接埠 (Port)</label>
+                    <input type="text" id="db-port" value="6379">
+                </div>
+                <div>
+                    <label class="section-label">密碼 (Password)</label>
+                    <input type="password" id="db-pass" placeholder="請輸入密碼">
+                </div>
+                <div>
+                    <label class="section-label">Redis 資料庫索引</label>
+                    <input type="text" id="db-redis-index" value="0">
+                </div>
+                """
+            elif db_type == "mongodb":
+                container.innerHTML = """
+                <div style="grid-column: span 2;">
+                    <label class="section-label">MongoDB 連線 URI</label>
+                    <input type="text" id="db-mongo-uri" value="mongodb://localhost:27017" placeholder="mongodb://username:password@host:port/database">
+                </div>
+                """
+
+        # Simulated Database structure mapping for MySQL/Postgres etc.
+        MOCK_DB_ANALYSIS = {
+            "mysql": {
+                "version": "MySQL 8.0.32 Community Server",
+                "tables": [
+                    {"name": "users", "purpose": "使用者帳戶與登入憑證", "row_count": 1420, "columns": ["id(INT)", "email(VARCHAR)", "password_hash(VARCHAR)", "created_at(DATETIME)"], "relationships": []},
+                    {"name": "orders", "purpose": "電子商務訂單紀錄", "row_count": 865, "columns": ["id(INT)", "user_id(INT)", "total_amount(DECIMAL)", "status(VARCHAR)", "ordered_at(DATETIME)"], "relationships": ["user_id → users.id"]}
+                ]
+            },
+            "postgres": {
+                "version": "PostgreSQL 15.2 (Ubuntu 15.2-1.pgdg22.04+1)",
+                "tables": [
+                    {"name": "employees", "purpose": "公司人事基礎資料", "row_count": 312, "columns": ["id(SERIAL)", "first_name(VARCHAR)", "last_name(VARCHAR)", "salary(NUMERIC)", "department_id(INT)"], "relationships": ["department_id → departments.id"]},
+                    {"name": "departments", "purpose": "部門部門組織劃分", "row_count": 8, "columns": ["id(SERIAL)", "name(VARCHAR)", "manager_id(INT)"], "relationships": []}
+                ]
+            },
+            "sqlite_sample": {
+                "version": "SQLite 3.39.5 (WebAssembly)",
+                "tables": [
+                    {"name": "english_practice", "purpose": "英文學習片語及意思紀錄", "row_count": 5, "columns": ["id(INTEGER)", "english(TEXT)", "translation(TEXT)", "example(TEXT)", "category(TEXT)", "created_at(TEXT)"], "relationships": []},
+                    {"name": "study_sessions", "purpose": "複習歷史紀錄與測驗結果", "row_count": 0, "columns": ["id(INTEGER)", "test_type(TEXT)", "score(INTEGER)", "total(INTEGER)", "accuracy(REAL)", "created_at(TEXT)"], "relationships": []}
+                ]
+            }
+        }
+
+        # Simulated / Real SQLite database connection tester
+        async def test_db_connection(event):
+            db_type = js.document.getElementById("db-type-select").value
+            status_msg = js.document.getElementById("db-connection-status-message")
+            status_msg.innerHTML = '<div class="spinner-block"><div class="spinner-block-icon"></div> 正在連線測試中...</div>'
+            
+            # Artificial sleep for UI loading demo
+            await asyncio.sleep(1.0)
+            
+            analysis_card = js.document.getElementById("db-analysis-card")
+            analysis_content = js.document.getElementById("db-analysis-content")
+            
+            ops_card = js.document.getElementById("db-ops-card")
+            table_select = js.document.getElementById("db-table-select")
+            sql_gen_card = js.document.getElementById("db-sql-generator-card")
+
+            if db_type == "sqlite":
+                filepath = js.document.getElementById("db-sqlite-path").value
+                try:
+                    # Establish actual connect inside PyScript filesystem
+                    test_conn = sqlite3.connect(filepath)
+                    test_curr = test_conn.cursor()
+                    
+                    # Fetch tables
+                    test_curr.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                    tables = [row[0] for row in test_curr.fetchall() if not row[0].startswith("sqlite_")]
+                    test_conn.close()
+                    
+                    status_msg.innerHTML = f'<div style="color:var(--color-emerald); font-weight:600; padding:10px 0;"><i class="fa-solid fa-circle-check"></i> 連線成功！成功連線至 SQLite 檔案: {filepath}</div>'
+                    
+                    # Render Analysis Results
+                    analysis_card.style.display = "flex"
+                    
+                    html_analysis = f"""
+                    <div style="font-size:0.95rem; margin-bottom:15px;">
+                        <strong>資料庫類型:</strong> SQLite | <strong>核心版本:</strong> SQLite 3.39.5 (WebAssembly)
+                    </div>
+                    <div class="db-table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>資料表名稱</th>
+                                    <th>用途描述</th>
+                                    <th>欄位結構</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    """
+                    for t_name in tables:
+                        # Fetch column info
+                        tc = sqlite3.connect(filepath)
+                        tcur = tc.cursor()
+                        tcur.execute(f"PRAGMA table_info({t_name})")
+                        columns = [f"{col[1]} ({col[2]})" for col in tcur.fetchall()]
+                        tc.close()
+                        
+                        purpose = "英文學習字庫紀錄" if t_name == "english_practice" else "歷史測驗記錄" if t_name == "study_sessions" else "應用系統表"
+                        
+                        html_analysis += f"""
+                            <tr>
+                                <td><strong>{t_name}</strong></td>
+                                <td>{purpose}</td>
+                                <td><code>{", ".join(columns)}</code></td>
+                            </tr>
+                        """
+                    html_analysis += "</tbody></table></div>"
+                    analysis_content.innerHTML = html_analysis
+                    
+                    # Populate table selectors
+                    table_select.innerHTML = ""
+                    for t_name in tables:
+                        opt = js.document.createElement("option")
+                        opt.value = t_name
+                        opt.innerText = t_name
+                        table_select.appendChild(opt)
+                        
+                    ops_card.style.display = "flex"
+                    sql_gen_card.style.display = "flex"
+                    
+                except Exception as e:
+                    status_msg.innerHTML = f'<div style="color:var(--color-crimson); font-weight:600; padding:10px 0;"><i class="fa-solid fa-circle-xmark"></i> 連線失敗: {str(e)}</div>'
+                    analysis_card.style.display = "none"
+                    ops_card.style.display = "none"
+                    sql_gen_card.style.display = "none"
+            
+            else:
+                # Simulated remote database types due to browser TCP sandbox constraints
+                mock_key = "postgres" if db_type == "postgres" else "mysql"
+                info = MOCK_DB_ANALYSIS.get(mock_key, MOCK_DB_ANALYSIS["mysql"])
+                
+                status_msg.innerHTML = f"""
+                <div style="color:var(--color-emerald); font-weight:600; padding:10px 0; line-height:1.5;">
+                    <i class="fa-solid fa-circle-check"></i> 模擬連線成功！<br>
+                    <span style="font-size:0.85rem; font-weight:normal; color:var(--text-secondary);">
+                        註：瀏覽器沙盒不支援開啟 raw TCP socket 連線至外部連接埠。已為您建立模擬連線結構，支持執行模擬 SQL 語法及 AI SQL 生成！
+                    </span>
+                </div>
+                """
+                
+                # Show mock analysis results
+                analysis_card.style.display = "flex"
+                html_analysis = f"""
+                <div style="font-size:0.95rem; margin-bottom:15px;">
+                    <strong>資料庫類型:</strong> {db_type.upper()} | <strong>伺服器版本:</strong> {info["version"]}
+                </div>
+                <div class="db-table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>資料表名稱</th>
+                                <th>用途描述</th>
+                                <th>資料行數</th>
+                                <th>欄位結構</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                """
+                for t in info["tables"]:
+                    html_analysis += f"""
+                        <tr>
+                            <td><strong>{t["name"]}</strong></td>
+                            <td>{t["purpose"]}</td>
+                            <td>{t["row_count"]}</td>
+                            <td><code>{", ".join(t["columns"])}</code></td>
+                        </tr>
+                    """
+                html_analysis += "</tbody></table></div>"
+                analysis_content.innerHTML = html_analysis
+                
+                # Populate tables selector
+                table_select.innerHTML = ""
+                for t in info["tables"]:
+                    opt = js.document.createElement("option")
+                    opt.value = t["name"]
+                    opt.innerText = t["name"]
+                    table_select.appendChild(opt)
+                    
+                ops_card.style.display = "flex"
+                sql_gen_card.style.display = "flex"
+
+        # Preview Database Table Rows
+        def preview_db_table(event):
+            db_type = js.document.getElementById("db-type-select").value
+            t_name = js.document.getElementById("db-table-select").value
+            
+            results_panel = js.document.getElementById("db-query-results-panel")
+            results_panel.style.display = "flex"
+            
+            table_container = js.document.getElementById("db-query-result-table-container")
+            table_container.innerHTML = ""
+            
+            count_label = js.document.getElementById("db-query-result-count")
+            delete_select = js.document.getElementById("db-delete-row-select")
+            delete_select.innerHTML = ""
+
+            if db_type == "sqlite":
+                filepath = js.document.getElementById("db-sqlite-path").value
+                try:
+                    tc = sqlite3.connect(filepath)
+                    cur = tc.cursor()
+                    
+                    # Fetch structure
+                    cur.execute(f"PRAGMA table_info({t_name})")
+                    columns = [col[1] for col in cur.fetchall()]
+                    
+                    # Fetch rows
+                    cur.execute(f"SELECT * FROM {t_name} LIMIT 50")
+                    rows = cur.fetchall()
+                    tc.close()
+                    
+                    count_label.innerText = f"查詢結果：{len(rows)} 筆記錄"
+                    
+                    if not rows:
+                        table_container.innerHTML = '<div style="padding:15px; text-align:center; color:var(--text-secondary);">該資料表中沒有任何記錄。</div>'
+                        return
+                    
+                    # Draw HTML Table
+                    html = "<table><thead><tr>"
+                    for col in columns:
+                        html += f"<th>{col}</th>"
+                    html += "</tr></thead><tbody>"
+                    
+                    for row in rows:
+                        html += "<tr>"
+                        for val in row:
+                            html += f"<td>{str(val)}</td>"
+                        html += "</tr>"
+                    html += "</tbody></table>"
+                    table_container.innerHTML = html
+                    
+                    # Populate delete selector (primary key id)
+                    pk_idx = 0
+                    if "id" in columns:
+                        pk_idx = columns.index("id")
+                    
+                    for idx, row in enumerate(rows):
+                        opt = js.document.createElement("option")
+                        opt.value = str(row[pk_idx])
+                        # Display prefix of row contents
+                        opt.innerText = f"ID {row[pk_idx]} - {', '.join(str(v)[:15] for v in row if v is not None)[:40]}"
+                        delete_select.appendChild(opt)
+
+                except Exception as e:
+                    table_container.innerHTML = f'<div style="padding:15px; color:var(--color-crimson);">讀取失敗: {str(e)}</div>'
+            else:
+                # Mock preview table for remote DB
+                count_label.innerText = "查詢結果：2 筆記錄 (模擬資料)"
+                
+                if t_name == "users":
+                    columns = ["id", "email", "password_hash", "created_at"]
+                    rows = [
+                        (1, "alex@example.com", "$2b$12$ExaMpLeHaSh1", "2026-06-01 12:00:00"),
+                        (2, "sam@example.com", "$2b$12$ExaMpLeHaSh2", "2026-06-02 15:30:00")
+                    ]
+                elif t_name == "orders":
+                    columns = ["id", "user_id", "total_amount", "status", "ordered_at"]
+                    rows = [
+                        (101, 1, 99.50, "Completed", "2026-06-15 10:15:00"),
+                        (102, 2, 45.00, "Processing", "2026-06-16 11:20:00")
+                    ]
+                elif t_name == "employees":
+                    columns = ["id", "first_name", "last_name", "salary", "department_id"]
+                    rows = [
+                        (1, "John", "Doe", 75000.0, 3),
+                        (2, "Jane", "Smith", 82000.0, 3)
+                    ]
+                else:
+                    columns = ["id", "name"]
+                    rows = [(1, "部門 A"), (2, "部門 B")]
+
+                html = "<table><thead><tr>"
+                for col in columns:
+                    html += f"<th>{col}</th>"
+                html += "</tr></thead><tbody>"
+                for row in rows:
+                    html += "<tr>"
+                    for val in row:
+                        html += f"<td>{str(val)}</td>"
+                    html += "</tr>"
+                html += "</tbody></table>"
+                table_container.innerHTML = html
+                
+                for r in rows:
+                    opt = js.document.createElement("option")
+                    opt.value = str(r[0])
+                    opt.innerText = f"ID {r[0]} - {r[1]}"
+                    delete_select.appendChild(opt)
+
+        # Run custom SQL query command
+        async def run_custom_sql_query(event):
+            db_type = js.document.getElementById("db-type-select").value
+            sql = js.document.getElementById("db-sql-query").value.strip()
+            
+            if not sql:
+                show_toast("請先輸入 SQL 語法", is_success=False)
+                return
+
+            results_panel = js.document.getElementById("db-query-results-panel")
+            results_panel.style.display = "flex"
+            
+            table_container = js.document.getElementById("db-query-result-table-container")
+            table_container.innerHTML = '<div class="spinner-block"><div class="spinner-block-icon"></div> 執行 SQL 查詢中...</div>'
+            
+            await asyncio.sleep(0.5)
+
+            if db_type == "sqlite":
+                filepath = js.document.getElementById("db-sqlite-path").value
+                try:
+                    tc = sqlite3.connect(filepath)
+                    cur = tc.cursor()
+                    
+                    cur.execute(sql)
+                    
+                    if sql.lower().startswith("select"):
+                        rows = cur.fetchall()
+                        columns = [desc[0] for desc in cur.description]
+                        tc.close()
+                        
+                        js.document.getElementById("db-query-result-count").innerText = f"查詢結果：{len(rows)} 筆記錄"
+                        
+                        if not rows:
+                            table_container.innerHTML = '<div style="padding:15px; text-align:center; color:var(--text-secondary);">查詢成功，但沒有返回任何記錄。</div>'
+                            return
+                            
+                        html = "<table><thead><tr>"
+                        for col in columns:
+                            html += f"<th>{col}</th>"
+                        html += "</tr></thead><tbody>"
+                        for row in rows:
+                            html += "<tr>"
+                            for val in row:
+                                html += f"<td>{str(val)}</td>"
+                            html += "</tr>"
+                        html += "</tbody></table>"
+                        table_container.innerHTML = html
+                    else:
+                        tc.commit()
+                        affected = tc.changes()
+                        tc.close()
+                        table_container.innerHTML = f'<div style="padding:15px; color:var(--color-emerald); font-weight:600;"><i class="fa-solid fa-circle-check"></i> SQL 執行成功！影響的資料列數: {affected}</div>'
+                        js.document.getElementById("db-query-result-count").innerText = "執行結果"
+                except Exception as e:
+                    table_container.innerHTML = f'<div style="padding:15px; color:var(--color-crimson);">SQL 執行出錯: {str(e)}</div>'
+            else:
+                # Simulated remote SQL run outputs
+                if sql.lower().startswith("select"):
+                    table_container.innerHTML = """
+                    <table>
+                        <thead>
+                            <tr><th>id</th><th>name</th><th>simulated_column</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1</td><td>測試資料列 A</td><td>模擬值 100</td></tr>
+                            <tr><td>2</td><td>測試資料列 B</td><td>模擬值 200</td></tr>
+                        </tbody>
+                    </table>
+                    """
+                    js.document.getElementById("db-query-result-count").innerText = "查詢結果：2 筆模擬資料"
+                else:
+                    table_container.innerHTML = '<div style="padding:15px; color:var(--color-emerald); font-weight:600;"><i class="fa-solid fa-circle-check"></i> 模擬執行 SQL 成功！影響列數: 1</div>'
+
+        # Delete selected SQLite row
+        def delete_sqlite_row(event):
+            db_type = js.document.getElementById("db-type-select").value
+            t_name = js.document.getElementById("db-table-select").value
+            pk_val = js.document.getElementById("db-delete-row-select").value
+            
+            if not pk_val:
+                show_toast("請先選擇要刪除的資料列", is_success=False)
+                return
+
+            if db_type == "sqlite":
+                filepath = js.document.getElementById("db-sqlite-path").value
+                try:
+                    tc = sqlite3.connect(filepath)
+                    cur = tc.cursor()
+                    
+                    # Fetch primary key name
+                    cur.execute(f"PRAGMA table_info({t_name})")
+                    columns = [col[1] for col in cur.fetchall()]
+                    pk_col = "id" if "id" in columns else columns[0]
+                    
+                    cur.execute(f"DELETE FROM {t_name} WHERE {pk_col} = ?", (pk_val,))
+                    tc.commit()
+                    tc.close()
+                    
+                    show_toast(f"成功從資料表 {t_name} 刪除主鍵值為 {pk_val} 的資料")
+                    preview_db_table(None)
+                except Exception as e:
+                    show_toast(f"刪除失敗: {e}", is_success=False)
+            else:
+                show_toast(f"模擬成功！已從資料表 {t_name} 刪除 ID {pk_val} (模擬資料)")
+
+        # AI natural language translation into SQL query
+        async def generate_sql_from_natural_language(event):
+            desc = js.document.getElementById("db-sql-desc").value.strip()
+            if not desc:
+                show_toast("請輸入您要查詢的資料庫敘述", is_success=False)
+                return
+            
+            db_type = js.document.getElementById("db-type-select").value
+            
+            gen_container = js.document.getElementById("db-generated-sql-container")
+            code_block = js.document.getElementById("db-generated-sql-code")
+            
+            gen_container.style.display = "block"
+            code_block.innerText = "AI 正在思考與生成 SQL 語句中，請稍候..."
+
+            # Form prompt using schemas
+            db_schema_details = ""
+            if db_type == "sqlite":
+                filepath = js.document.getElementById("db-sqlite-path").value
+                tc = sqlite3.connect(filepath)
+                cur = tc.cursor()
+                cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row[0] for row in cur.fetchall() if not row[0].startswith("sqlite_")]
+                for t_name in tables:
+                    cur.execute(f"PRAGMA table_info({t_name})")
+                    cols = [f"{c[1]}({c[2]})" for c in cur.fetchall()]
+                    db_schema_details += f"Table {t_name} columns: {', '.join(cols)}\n"
+                tc.close()
+            else:
+                info = MOCK_DB_ANALYSIS.get(db_type, MOCK_DB_ANALYSIS["mysql"])
+                for t in info["tables"]:
+                    db_schema_details += f"Table {t['name']} columns: {', '.join(t['columns'])}\n"
+
+            prompt = f"""你是一個資料庫專家的 SQL 生成引擎。
+目前資料庫類型為: {db_type.upper()}
+資料庫結構說明如下：
+{db_schema_details}
+
+請根據使用者的中文敘述需求，寫出一個正確高效的 SQL 查詢。
+需求敘述：{desc}
+
+請僅輸出 SQL 語法本身，不要包含 any 额外說明、註解或 markdown 標記（如 ```sql ）。"""
+
+            provider = js.document.getElementById("ai-provider").value
+            model = js.document.getElementById("ai-model").value
+            temp = js.document.getElementById("ai-temp").value
+
+            try:
+                sql_response = await call_llm(provider, model, temp, "你是一位精通 SQL 的資料庫專家助手。", prompt)
+                code_block.innerText = sql_response.strip()
+            except Exception as e:
+                code_block.innerText = f"生成失敗，錯誤訊息：{str(e)}\n\n(提示：請檢查側邊欄的 AI 模型金鑰是否設定正確，或改為 Ollama 本地模式)"
+
+        # ----------------------------------------------------
+        # Tab 3: English Learning logic
+        # ----------------------------------------------------
+        def refresh_english_practice_metrics():
+            # Calculate counts
+            cursor.execute("SELECT COUNT(*) FROM english_practice")
+            cnt_words = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM study_sessions")
+            cnt_quizzes = cursor.fetchone()[0]
+            
+            # Calculate average accuracy
+            cursor.execute("SELECT AVG(accuracy) FROM study_sessions")
+            avg_acc = cursor.fetchone()[0] or 0.0
+            
+            js.document.getElementById("metric-word-count").innerText = str(cnt_words)
+            js.document.getElementById("metric-quiz-count").innerText = str(cnt_quizzes)
+            js.document.getElementById("metric-accuracy").innerText = f"{avg_acc*100:.0f}%"
+
+            # Check daily review reminder
+            today = datetime.utcnow().date().isoformat()
+            cursor.execute("SELECT review_date FROM daily_review ORDER BY id DESC LIMIT 1")
+            last_review = cursor.fetchone()
+            
+            reminder_panel = js.document.getElementById("review-reminder-panel")
+            reminder_msg = js.document.getElementById("review-reminder-msg")
+            
+            if last_review and last_review[0] == today:
+                reminder_panel.style.border = "1px solid rgba(16, 185, 129, 0.25)"
+                reminder_panel.style.background = "rgba(16, 185, 129, 0.05)"
+                reminder_msg.innerHTML = f'<span style="color:var(--color-emerald); font-weight:700;">✅ 今日已完成複習！</span> 最後一次標記日期：{last_review[0]}'
+            else:
+                reminder_panel.style.border = "1px solid rgba(245, 158, 11, 0.25)"
+                reminder_panel.style.background = "rgba(245, 158, 11, 0.05)"
+                reminder_msg.innerHTML = '📅 <span style="color:var(--color-amber); font-weight:700;">今日還沒有完成複習！</span> 建議每天複習 5 個單字或做一次測驗以鞏固記憶。'
+
+            # Populate vocabulary category dropdown selectors
+            refresh_vocabulary_categories_selectors()
+
+        def mark_daily_review_complete(event):
+            today = datetime.utcnow().date().isoformat()
+            # Check if already saved today
+            cursor.execute("SELECT COUNT(*) FROM daily_review WHERE review_date = ?", (today,))
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("INSERT INTO daily_review (review_date, created_at) VALUES (?,?)", 
+                               (today, datetime.utcnow().isoformat()))
+                conn.commit()
+            show_toast("已記錄今日複習完成！")
+            refresh_english_practice_metrics()
+
+        # Vocabulary list & Categories selectors updater
+        def refresh_vocabulary_categories_selectors():
+            # Get unique categories from items + saved setting
+            cursor.execute("SELECT DISTINCT category FROM english_practice")
+            categories = {row[0] for row in cursor.fetchall() if row[0]}
+            categories.add("未分類")
+            
+            cat_list = sorted(list(categories))
+            
+            # Select box for card review
+            card_cat_select = js.document.getElementById("vocab-card-category-select")
+            active_card_cat = card_cat_select.value
+            card_cat_select.innerHTML = ""
+            
+            # Select box for viewing list
+            cat_view_select = js.document.getElementById("cat-view-list-select")
+            active_view_cat = cat_view_select.value
+            cat_view_select.innerHTML = ""
+            
+            # Select box for adding word
+            vocab_add_cat_select = js.document.getElementById("vocab-add-category-select")
+            active_add_cat = vocab_add_cat_select.value
+            vocab_add_cat_select.innerHTML = ""
+
+            for cat in cat_list:
+                # Option 1
+                opt1 = js.document.createElement("option")
+                opt1.value = cat
+                opt1.innerText = cat
+                card_cat_select.appendChild(opt1)
+                
+                # Option 2
+                opt2 = js.document.createElement("option")
+                opt2.value = cat
+                opt2.innerText = cat
+                cat_view_select.appendChild(opt2)
+
+                # Option 3
+                opt3 = js.document.createElement("option")
+                opt3.value = cat
+                opt3.innerText = cat
+                vocab_add_cat_select.appendChild(opt3)
+
+            # Restore selections
+            if active_card_cat in cat_list:
+                card_cat_select.value = active_card_cat
+            if active_view_cat in cat_list:
+                cat_view_select.value = active_view_cat
+            if active_add_cat in cat_list:
+                vocab_add_cat_select.value = active_add_cat
+
+            # Category labels
+            js.document.getElementById("cat-list-labels").innerText = "、".join(cat_list)
+            
+            # Refresh category lists content
+            refresh_category_words_list()
+
+        # Add custom category
+        def add_custom_category(event):
+            cat_name = js.document.getElementById("cat-add-input").value.strip()
+            if not cat_name:
+                show_toast("請輸入分類名稱", is_success=False)
+                return
+            
+            # We add a dummy word in category to initialize it
+            cursor.execute("INSERT INTO english_practice (english, translation, example, category, created_at) VALUES (?,?,?,?,?)",
+                           (f"dummy-{cat_name}", "分類初始化佔位", "", cat_name, datetime.utcnow().isoformat()))
+            conn.commit()
+            
+            js.document.getElementById("cat-add-input").value = ""
+            show_toast(f"分類 {cat_name} 新增成功")
+            refresh_vocabulary_categories_selectors()
+
+        # Render list of words for selected category
+        def refresh_category_words_list(event=None):
+            cat = js.document.getElementById("cat-view-list-select").value
+            tbody = js.document.getElementById("cat-words-tbody-list")
+            tbody.innerHTML = ""
+            
+            if not cat:
+                cat = "未分類"
+
+            cursor.execute("SELECT id, english, translation, example FROM english_practice WHERE category = ?", (cat,))
+            rows = cursor.fetchall()
+            
+            # Skip placeholders
+            rows = [r for r in rows if not r[1].startswith("dummy-")]
+            
+            if not rows:
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">該分類目前沒有單字。</td></tr>'
+                return
+                
+            for w_id, eng, trans, ex in rows:
+                tr = js.document.createElement("tr")
+                
+                td_eng = js.document.createElement("td")
+                td_eng.innerHTML = f"<strong>{eng}</strong>"
+                
+                td_trans = js.document.createElement("td")
+                td_trans.innerText = trans
+                
+                td_ex = js.document.createElement("td")
+                td_ex.innerText = ex or ""
+                
+                td_actions = js.document.createElement("td")
+                td_actions.style.textAlign = "center"
+                
+                # Delete btn
+                del_btn = js.document.createElement("button")
+                del_btn.className = "btn btn-danger"
+                del_btn.style.padding = "5px 10px"
+                del_btn.style.fontSize = "0.8rem"
+                del_btn.innerHTML = '<i class="fa-solid fa-trash"></i>'
+                
+                # Event closure
+                def make_delete_handler(word_id, word_name):
+                    def handler(evt):
+                        cursor.execute("DELETE FROM english_practice WHERE id = ?", (word_id,))
+                        conn.commit()
+                        show_toast(f"已刪除單字: {word_name}")
+                        refresh_vocabulary_categories_selectors()
+                        refresh_flashcard_view()
+                    return handler
+
+                del_btn.addEventListener("click", create_proxy(make_delete_handler(w_id, eng)))
+                td_actions.appendChild(del_btn)
+                
+                tr.appendChild(td_eng)
+                tr.appendChild(td_trans)
+                tr.appendChild(td_ex)
+                tr.appendChild(td_actions)
+                tbody.appendChild(tr)
+
+        # Single word card state variables
+        current_card_index = 0
+        current_cards_list = []
+
+        def refresh_flashcard_view():
+            global current_card_index, current_cards_list
+            cat = js.document.getElementById("vocab-card-category-select").value
+            
+            cursor.execute("SELECT id, english, translation, example FROM english_practice WHERE category = ?", (cat,))
+            rows = cursor.fetchall()
+            current_cards_list = [r for r in rows if not r[1].startswith("dummy-")]
+            
+            # If no words in this category, try loading all
+            if not current_cards_list:
+                cursor.execute("SELECT id, english, translation, example FROM english_practice")
+                current_cards_list = [r for r in cursor.fetchall() if not r[1].startswith("dummy-")]
+
+            if not current_cards_list:
+                js.document.getElementById("card-front-word").innerText = "無單字"
+                js.document.getElementById("card-back-translation").innerText = "請先新增單字"
+                js.document.getElementById("card-back-example").innerText = ""
+                js.document.getElementById("card-index-label").innerText = "0/0"
+                return
+
+            if current_card_index >= len(current_cards_list):
+                current_card_index = 0
+            
+            card = current_cards_list[current_card_index]
+            
+            # Setup UI
+            js.document.getElementById("card-index-label").innerText = f"卡片 {current_card_index + 1}/{len(current_cards_list)}"
+            
+            direction = js.document.querySelector('input[name="display-direction"]:checked').value
+            
+            if direction == "english":
+                js.document.getElementById("card-front-word").innerText = card[1]
+                js.document.getElementById("card-back-translation").innerText = card[2]
+            else:
+                js.document.getElementById("card-front-word").innerText = card[2]
+                js.document.getElementById("card-back-translation").innerText = card[1]
+                
+            js.document.getElementById("card-back-example").innerText = card[3] or "（目前無例句）"
+            
+            # Reset card rotation
+            js.document.getElementById("flashcard-perspective").classList.remove("flipped")
+
+        def toggle_card_flip(event):
+            card = js.document.getElementById("flashcard-perspective")
+            card.classList.toggle("flipped")
+
+        def reveal_card_answer(event):
+            js.document.getElementById("flashcard-perspective").classList.add("flipped")
+
+        def card_next(event):
+            global current_card_index
+            if current_cards_list:
+                current_card_index = (current_card_index + 1) % len(current_cards_list)
+                refresh_flashcard_view()
+
+        def card_prev(event):
+            global current_card_index
+            if current_cards_list:
+                current_card_index = (current_card_index - 1) % len(current_cards_list)
+                refresh_flashcard_view()
+
+        # Score cards review
+        def record_card_feedback(remember):
+            if not current_cards_list:
+                return
+            score = 1 if remember else 0
+            cursor.execute("INSERT INTO study_sessions (test_type, score, total, accuracy, created_at) VALUES (?,?,?,?,?)",
+                           ("flashcard", score, 1, float(score), datetime.utcnow().isoformat()))
+            conn.commit()
+            show_toast("已記錄複習結果")
+            refresh_english_practice_metrics()
+            card_next(None)
+
+        def handle_card_remember(event):
+            record_card_feedback(True)
+
+        def handle_card_review_need(event):
+            record_card_feedback(False)
+
+        # Dictionary lookup logic
+        async def run_dict_lookup(event):
+            query = js.document.getElementById("dict-search-input").value.strip()
+            if not query:
+                show_toast("請輸入搜尋字彙或片語", is_success=False)
+                return
+
+            panel = js.document.getElementById("dict-search-result-panel")
+            panel.style.display = "flex"
+            
+            # Clear fields
+            js.document.getElementById("dict-res-english").value = query
+            js.document.getElementById("dict-res-translation").value = "查詢中..."
+            js.document.getElementById("dict-res-example").value = ""
+            js.document.getElementById("dict-res-example-trans").value = ""
+            
+            # Search local database first
+            cursor.execute("SELECT translation, example FROM english_practice WHERE english LIKE ? OR translation LIKE ? LIMIT 1",
+                           (f"%{query}%", f"%{query}%"))
+            local_row = cursor.fetchone()
+            
+            if local_row:
+                js.document.getElementById("dict-res-translation").value = local_row[0]
+                # parse example
+                ex_text = local_row[1] or ""
+                eng_ex, chi_ex = "", ""
+                if "｜" in ex_text:
+                    parts = ex_text.split("｜")
+                    eng_ex = parts[0].strip()
+                    chi_ex = parts[1].strip()
+                elif "|" in ex_text:
+                    parts = ex_text.split("|")
+                    eng_ex = parts[0].strip()
+                    chi_ex = parts[1].strip()
+                else:
+                    eng_ex = ex_text
+                
+                js.document.getElementById("dict-res-example").value = eng_ex
+                js.document.getElementById("dict-res-example-trans").value = chi_ex
+                show_toast("本機資料庫查詢成功")
+            else:
+                # LLM AI query translation
+                provider = js.document.getElementById("ai-provider").value
+                model = js.document.getElementById("ai-model").value
+                temp = js.document.getElementById("ai-temp").value
+                
+                prompt = f"""請提供英文單字或片語 '{query}' 的中文意思，並附上一個自然的英文例句與對應中文翻譯。
+格式請固定如下，不要包含 any markdown 或其他文字：
+中文意思：[中文說明]
+例句：[英文例句] ｜ 中文翻譯：[中文翻譯]"""
+
+                try:
+                    ai_response = await call_llm(provider, model, temp, "你是一位專業的英文單字字典助手。", prompt)
+                    
+                    # Parse AI response lines
+                    translation, example, translation_example = "", "", ""
+                    for line in ai_response.splitlines():
+                        if "中文意思：" in line:
+                            translation = line.split("中文意思：", 1)[1].strip()
+                        elif "例句：" in line:
+                            val = line.split("例句：", 1)[1].strip()
+                            if "｜" in val:
+                                p = val.split("｜")
+                                example = p[0].strip()
+                                if "中文翻譯：" in p[1]:
+                                    translation_example = p[1].split("中文翻譯：", 1)[1].strip()
+                                else:
+                                    translation_example = p[1].strip()
+                            else:
+                                example = val
+
+                    js.document.getElementById("dict-res-translation").value = translation or ai_response.strip()
+                    js.document.getElementById("dict-res-example").value = example
+                    js.document.getElementById("dict-res-example-trans").value = translation_example
+                    show_toast("AI 字典查詢生成成功")
+                except Exception as e:
+                    js.document.getElementById("dict-res-translation").value = f"查詢失敗: {e}"
+
+        # Generate multiple example sentences using AI
+        async def generate_multiple_examples(event):
+            eng = js.document.getElementById("dict-res-english").value.strip()
+            trans = js.document.getElementById("dict-res-translation").value.strip()
+            if not eng:
+                show_toast("請先執行字典查詢", is_success=False)
+                return
+                
+            container = js.document.getElementById("dict-additional-examples-container")
+            list_box = js.document.getElementById("dict-additional-examples-list")
+            container.style.display = "flex"
+            list_box.innerHTML = '<div class="spinner-inline"></div> AI 正在生成多個例句中...'
+            
+            provider = js.document.getElementById("ai-provider").value
+            model = js.document.getElementById("ai-model").value
+            temp = js.document.getElementById("ai-temp").value
+            
+            prompt = f"""請為英文單字/片語 '{eng}' (中文意思：{trans}) 生成 3 個生動自然的全新英文例句，並附上對應中文翻譯。
+請每行格式固定如下，不要包含 markdown 標記：
+例句：英文例句 ｜ 中文翻譯"""
+            
+            try:
+                resp = await call_llm(provider, model, temp, "你是一位專業的英文語言教學助手。", prompt)
+                lines = [l.strip() for l in resp.splitlines() if "例句：" in l or "｜" in l]
+                if not lines:
+                    lines = [l.strip() for l in resp.splitlines() if l.strip()]
+                    
+                list_box.innerHTML = ""
+                ex_items = []
+                for line in lines:
+                    val = line.replace("例句：", "").strip()
+                    item_div = js.document.createElement("div")
+                    item_div.style.background = "rgba(255,255,255,0.05)"
+                    item_div.style.padding = "8px 12px"
+                    item_div.style.borderRadius = "8px"
+                    item_div.innerText = f"• {val}"
+                    list_box.appendChild(item_div)
+                    ex_items.append(val)
+                    
+                existing_ex = js.document.getElementById("dict-res-example").value.strip()
+                new_merged = existing_ex + ("\n" if existing_ex else "") + "\n".join(ex_items)
+                js.document.getElementById("dict-res-example").value = new_merged
+                show_toast("多例句生成成功！")
+            except Exception as e:
+                list_box.innerHTML = f'<div style="color:var(--color-crimson);">生成失敗: {e}</div>'
+
+        # Assign active card to selected category
+        def collect_card_to_category(event):
+            global active_flashcard_list, active_flashcard_index
+            if not active_flashcard_list or active_flashcard_index >= len(active_flashcard_list):
+                show_toast("無可收藏之卡片", is_success=False)
+                return
+            card = active_flashcard_list[active_flashcard_index]
+            word_id = card[0]
+            cat = js.document.getElementById("vocab-card-category-select").value or "未分類"
+            
+            cursor.execute("UPDATE english_practice SET category = ? WHERE id = ?", (cat, word_id))
+            conn.commit()
+            show_toast(f"卡片 [{card[1]}] 已成功加入至 [{cat}] 分類！")
+            refresh_flashcard_view()
+
+        # Copy generated SQL code
+        def copy_generated_sql(event):
+            code = js.document.getElementById("db-generated-sql-code").innerText.strip()
+            js.navigator.clipboard.writeText(code)
+            show_toast("SQL 語法已複製到剪貼簿！")
+
+        # Apply generated SQL code to query editor and run
+        def apply_generated_sql(event):
+            code = js.document.getElementById("db-generated-sql-code").innerText.strip()
+            js.document.getElementById("db-sql-query").value = code
+            asyncio.ensure_future(run_custom_sql_query(None))
+
+        # Save word from dict to db
+        def save_word_from_dict(event):
+            eng = js.document.getElementById("dict-res-english").value.strip()
+            trans = js.document.getElementById("dict-res-translation").value.strip()
+            ex_eng = js.document.getElementById("dict-res-example").value.strip()
+            ex_trans = js.document.getElementById("dict-res-example-trans").value.strip()
+            cat = js.document.getElementById("vocab-card-category-select").value or "未分類"
+
+            if not eng or not trans:
+                show_toast("英文與中文意思不能為空", is_success=False)
+                return
+
+            ex_field = f"{ex_eng}｜{ex_trans}" if ex_eng else ""
+            
+            cursor.execute("INSERT INTO english_practice (english, translation, example, category, created_at) VALUES (?,?,?,?,?)",
+                           (eng, trans, ex_field, cat, datetime.utcnow().isoformat()))
+            conn.commit()
+            
+            show_toast(f"單字 {eng} 已成功存入 {cat} 分類！")
+            refresh_english_practice_metrics()
+
+        # Save single manual input vocabulary item
+        def save_single_word_manual(event):
+            cat = js.document.getElementById("vocab-add-category-select").value
+            eng = js.document.getElementById("vocab-add-english").value.strip()
+            trans = js.document.getElementById("vocab-add-translation").value.strip()
+            ex_eng = js.document.getElementById("vocab-add-example").value.strip()
+            ex_trans = js.document.getElementById("vocab-add-example-trans").value.strip()
+
+            if not eng or not trans:
+                show_toast("請填寫英文單字與中文翻譯", is_success=False)
+                return
+
+            ex_field = f"{ex_eng}｜{ex_trans}" if ex_eng else ""
+            cursor.execute("INSERT INTO english_practice (english, translation, example, category, created_at) VALUES (?,?,?,?,?)",
+                           (eng, trans, ex_field, cat, datetime.utcnow().isoformat()))
+            conn.commit()
+            
+            # Clear form
+            js.document.getElementById("vocab-add-english").value = ""
+            js.document.getElementById("vocab-add-translation").value = ""
+            js.document.getElementById("vocab-add-example").value = ""
+            js.document.getElementById("vocab-add-example-trans").value = ""
+
+            show_toast("單字已成功儲存！")
+            refresh_english_practice_metrics()
+
+        # AI Automatic Vocabulary generation
+        async def run_vocab_auto_generation(event):
+            theme = js.document.getElementById("vocab-gen-theme").value
+            level = js.document.getElementById("vocab-gen-level").value
+            count = int(js.document.getElementById("vocab-gen-count").value)
+            
+            btn = js.document.getElementById("btn-vocab-auto-generate")
+            original_html = btn.innerHTML
+            btn.innerHTML = '<div class="spinner-inline"></div> AI 生成與寫入中...'
+            btn.disabled = True
+
+            prompt = f"""請生成 {count} 個適合 {level} 程度的「{theme}」英文單字或常用片語。
+請嚴格以下方的 JSON 陣列格式回傳，不可包含 any markdown 標記（如 ```json）或 any 額外的文字/引言。
+
+[
+  {{
+    "english": "單字或片語",
+    "translation": "中文意思說明",
+    "example": "英文例句 ｜ 中文翻譯"
+  }}
+]"""
+
+            provider = js.document.getElementById("ai-provider").value
+            model = js.document.getElementById("ai-model").value
+            temp = js.document.getElementById("ai-temp").value
+
+            try:
+                raw_response = await call_llm(provider, model, temp, "你是一位專業的英文語言教學助手。", prompt)
+                
+                # strip json markdown block if any
+                clean_json = raw_response.strip()
+                if clean_json.startswith("```"):
+                    lines = clean_json.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    clean_json = "\n".join(lines).strip()
+
+                vocab_list = json.loads(clean_json)
+                
+                added_count = 0
+                for item in vocab_list:
+                    eng = item.get("english", "").strip()
+                    trans = item.get("translation", "").strip()
+                    ex = item.get("example", "").strip()
+                    if eng and trans:
+                        cursor.execute("INSERT INTO english_practice (english, translation, example, category, created_at) VALUES (?,?,?,?,?)",
+                                       (eng, trans, ex, theme, datetime.utcnow().isoformat()))
+                        added_count += 1
+                conn.commit()
+                
+                show_toast(f"成功自動生成並匯入 {added_count} 個單字至 {theme} 分類！")
+                refresh_english_practice_metrics()
+            except Exception as e:
+                show_toast(f"AI 生成失敗: {e}", is_success=False)
+            finally:
+                btn.innerHTML = original_html
+                btn.disabled = False
+
+        # TOEFL quiz states
+        current_quiz_answer = ""
+        current_quiz_question = ""
+
+        def render_new_quiz_question():
+            global current_quiz_answer, current_quiz_question
+            
+            # Fetch words list
+            cursor.execute("SELECT english, translation FROM english_practice")
+            rows = [r for r in cursor.fetchall() if not r[0].startswith("dummy-")]
+            
+            container = js.document.getElementById("quiz-options-list")
+            container.innerHTML = ""
+            js.document.getElementById("quiz-result-feedback").style.display = "none"
+            js.document.getElementById("btn-quiz-submit").style.display = "inline-flex"
+            js.document.getElementById("btn-quiz-next").style.display = "none"
+
+            if len(rows) < 2:
+                js.document.getElementById("quiz-question-text").innerText = "請先在庫中建立至少 2 個以上的單字以啟動 TOEFL 測驗。"
+                js.document.getElementById("btn-quiz-submit").disabled = True
+                return
+
+            js.document.getElementById("btn-quiz-submit").disabled = False
+            
+            # Select target word
+            sample = random.choice(rows)
+            current_quiz_question = sample[0]
+            current_quiz_answer = sample[1]
+            
+            js.document.getElementById("quiz-question-text").innerText = f"請選擇最適合的中文意思： {current_quiz_question}"
+            
+            # Collect distractors
+            distractors = [r[1] for r in rows if r[1] != current_quiz_answer]
+            if len(distractors) < 3:
+                distractors += ["請重新練習", "這是測驗示例", "請稍後再試"]
+            
+            options = [current_quiz_answer] + random.sample(distractors, k=min(3, len(distractors)))
+            random.shuffle(options)
+            
+            for idx, opt in enumerate(options):
+                lbl = js.document.createElement("label")
+                lbl.className = "quiz-option-label"
+                lbl.innerHTML = f'<input type="radio" name="quiz-ans-opt" value="{opt}"> <span>{opt}</span>'
+                
+                # Make interactive click
+                def make_option_click_handler(element):
+                    def handler(evt):
+                        for el in js.document.querySelectorAll(".quiz-option-label"):
+                            el.classList.remove("selected")
+                        element.classList.add("selected")
+                    return handler
+                lbl.addEventListener("click", create_proxy(make_option_click_handler(lbl)))
+                
+                container.appendChild(lbl)
+
+        def submit_quiz_answer(event):
+            selected_opt = js.document.querySelector('input[name="quiz-ans-opt"]:checked')
+            if not selected_opt:
+                show_toast("請選擇一個選項", is_success=False)
+                return
+            
+            ans = selected_opt.value
+            is_correct = ans == current_quiz_answer
+            
+            feedback = js.document.getElementById("quiz-result-feedback")
+            feedback.style.display = "block"
+            
+            score = 1 if is_correct else 0
+            # Save session to SQLite
+            cursor.execute("INSERT INTO study_sessions (test_type, score, total, accuracy, created_at) VALUES (?,?,?,?,?)",
+                           ("toefl", score, 1, float(score), datetime.utcnow().isoformat()))
+            conn.commit()
+            
+            if is_correct:
+                feedback.style.background = "rgba(16, 185, 129, 0.15)"
+                feedback.style.color = "var(--color-emerald)"
+                feedback.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜答對了！'
+            else:
+                feedback.style.background = "rgba(239, 68, 68, 0.15)"
+                feedback.style.color = "var(--color-crimson)"
+                feedback.innerHTML = f'<i class="fa-solid fa-circle-xmark"></i> 答錯囉！正確答案是：<strong>{current_quiz_answer}</strong>'
+            
+            js.document.getElementById("btn-quiz-submit").style.display = "none"
+            js.document.getElementById("btn-quiz-next").style.display = "inline-flex"
+            refresh_english_practice_metrics()
+
+        def draw_study_charts():
+            cursor.execute("SELECT created_at, score, total, accuracy FROM study_sessions ORDER BY id ASC")
+            rows = cursor.fetchall()
+            
+            # Populate tables view
+            tbody = js.document.getElementById("study-trend-tbody")
+            tbody.innerHTML = ""
+            
+            if not rows:
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:15px;">尚無測驗歷程數據以產生圖表。</td></tr>'
+                return
+                
+            # Aggregate by dates
+            trend_map = {}
+            for r in rows:
+                date_str = r[0][:10]
+                if date_str not in trend_map:
+                    trend_map[date_str] = {"score": 0, "total": 0}
+                trend_map[date_str]["score"] += r[1]
+                trend_map[date_str]["total"] += r[2]
+                
+            sorted_dates = sorted(list(trend_map.keys()))
+            accuracies = [round(trend_map[d]["score"] / trend_map[d]["total"], 2) for d in sorted_dates]
+            totals = [trend_map[d]["total"] for d in sorted_dates]
+            
+            # Fill tables UI
+            for d in sorted_dates:
+                tr = js.document.createElement("tr")
+                acc_val = round(trend_map[d]["score"] / trend_map[d]["total"], 2)
+                tr.innerHTML = f"""
+                    <td>{d}</td>
+                    <td>{trend_map[d]["score"]}</td>
+                    <td>{trend_map[d]["total"]}</td>
+                    <td>{acc_val*100:.0f}%</td>
+                """
+                tbody.appendChild(tr)
+                
+            # Call browser JS charting bridge logic
+            js.window.updateCharts(sorted_dates, accuracies, totals)
+
+        # ----------------------------------------------------
+        # Excel / CSV Exporter tool
+        # ----------------------------------------------------
+        def export_query_results_csv(event):
+            db_type = js.document.getElementById("db-type-select").value
+            t_name = js.document.getElementById("db-table-select").value
+            
+            if db_type == "sqlite":
+                filepath = js.document.getElementById("db-sqlite-path").value
+                try:
+                    tc = sqlite3.connect(filepath)
+                    cur = tc.cursor()
+                    cur.execute(f"PRAGMA table_info({t_name})")
+                    columns = [col[1] for col in cur.fetchall()]
+                    
+                    cur.execute(f"SELECT * FROM {t_name}")
+                    rows = cur.fetchall()
+                    tc.close()
+                    
+                    csv_content = ",".join(columns) + "\n"
+                    for row in rows:
+                        csv_content += ",".join(f'"{str(v)}"' for v in row) + "\n"
+                        
+                    js.window.downloadFile(f"{t_name}_export.csv", csv_content, "text/csv")
+                    show_toast("CSV 導出並下載成功")
+                except Exception as e:
+                    show_toast(f"CSV 導出失敗: {e}", is_success=False)
+            else:
+                show_toast("模擬導出 CSV 成功 (下載 simulated_data.csv)", is_success=True)
+                js.window.downloadFile("simulated_data.csv", "id,name,value\n1,模擬A,100\n2,模擬B,200", "text/csv")
+
+        # ----------------------------------------------------
+        # Initialize Everything
+        # ----------------------------------------------------
+        async def main():
+            # 1. Initialize local SQLite Database inside WebAssembly
+            init_local_db()
+            
+            # 2. Try fetching local environment files
+            await load_env()
+            
+            # 3. Setup tabs switching navigation handlers
+            setup_tabs()
+            
+            # 4. Fill models list select box & summary card
+            await populate_models_dropdown()
+            js.document.getElementById("ai-provider").addEventListener("change", create_proxy(lambda e: asyncio.ensure_future(populate_models_dropdown())))
+            js.document.getElementById("ai-model").addEventListener("change", create_proxy(lambda e: update_summary_card()))
+            
+            # Slider update value UI
+            def handle_temp_change(e):
+                js.document.getElementById("temp-val-display").innerText = str(e.target.value)
+                update_summary_card()
+            js.document.getElementById("ai-temp").addEventListener("input", create_proxy(handle_temp_change))
+
+            # Hide/show custom persona text area
+            def handle_persona_change(e):
+                p = e.target.value
+                box = js.document.getElementById("custom-prompt-container")
+                if p == "Custom Prompt":
+                    box.style.display = "block"
+                else:
+                    box.style.display = "none"
+            js.document.getElementById("ai-persona").addEventListener("change", create_proxy(handle_persona_change))
+
+            # Language switcher listener
+            js.document.getElementById("ui-locale").addEventListener("change", create_proxy(lambda e: [update_language_labels(), refresh_chat_messages_ui()]))
+            update_language_labels()
+
+            # Clear history action
+            js.document.getElementById("btn-clear-history-sidebar").addEventListener("click", create_proxy(clear_chat_history))
+
+            # Chat events
+            refresh_chat_messages_ui()
+            js.document.getElementById("btn-send-chat").addEventListener("click", create_proxy(send_chat_message))
+            
+            # DB config tab events
+            render_db_config_fields()
+            js.document.getElementById("db-type-select").addEventListener("change", create_proxy(render_db_config_fields))
+            js.document.getElementById("btn-test-db").addEventListener("click", create_proxy(test_db_connection))
+            js.document.getElementById("btn-db-table-preview").addEventListener("click", create_proxy(preview_db_table))
+            js.document.getElementById("btn-db-table-reload").addEventListener("click", create_proxy(preview_db_table))
+            js.document.getElementById("btn-db-run-sql").addEventListener("click", create_proxy(run_custom_sql_query))
+            js.document.getElementById("btn-db-delete-row").addEventListener("click", create_proxy(delete_sqlite_row))
+            js.document.getElementById("btn-db-generate-sql").addEventListener("click", create_proxy(generate_sql_from_natural_language))
+            js.document.getElementById("btn-db-copy-sql").addEventListener("click", create_proxy(copy_generated_sql))
+            js.document.getElementById("btn-db-apply-sql").addEventListener("click", create_proxy(apply_generated_sql))
+            js.document.getElementById("btn-db-download-csv").addEventListener("click", create_proxy(export_query_results_csv))
+
+            # English Practice tab events
+            refresh_english_practice_metrics()
+            js.document.getElementById("btn-mark-review-completed").addEventListener("click", create_proxy(mark_daily_review_complete))
+            js.document.getElementById("btn-vocab-auto-generate").addEventListener("click", create_proxy(run_vocab_auto_generation))
+            
+            # Flip Card events
+            refresh_flashcard_view()
+            js.document.getElementById("flashcard-perspective").addEventListener("click", create_proxy(toggle_card_flip))
+            js.document.getElementById("btn-card-reveal").addEventListener("click", create_proxy(reveal_card_answer))
+            js.document.getElementById("btn-card-next").addEventListener("click", create_proxy(card_next))
+            js.document.getElementById("btn-card-prev").addEventListener("click", create_proxy(card_prev))
+            js.document.getElementById("btn-card-remember").addEventListener("click", create_proxy(handle_card_remember))
+            js.document.getElementById("btn-card-review-need").addEventListener("click", create_proxy(handle_card_review_need))
+            js.document.getElementById("btn-card-collect-cat").addEventListener("click", create_proxy(collect_card_to_category))
+            js.document.getElementById("vocab-card-category-select").addEventListener("change", create_proxy(lambda e: refresh_flashcard_view()))
+            
+            # Favorite star toggle
+            def toggle_fav_card(e):
+                btn = js.document.getElementById("btn-card-favorite")
+                if "btn-secondary" in btn.className:
+                    btn.className = "btn btn-primary"
+                    btn.innerHTML = '<i class="fa-solid fa-star" style="color:var(--color-amber);"></i> 已收藏'
+                    show_toast("已收藏目前卡片！")
+                else:
+                    btn.className = "btn btn-secondary"
+                    btn.innerHTML = '<i class="fa-solid fa-star"></i> 收藏'
+                    show_toast("已取消收藏目前卡片")
+            js.document.getElementById("btn-card-favorite").addEventListener("click", create_proxy(toggle_fav_card))
+
+            # Dict lookup events
+            js.document.getElementById("btn-dict-search").addEventListener("click", create_proxy(run_dict_lookup))
+            js.document.getElementById("btn-dict-save-word").addEventListener("click", create_proxy(save_word_from_dict))
+            js.document.getElementById("btn-dict-gen-examples").addEventListener("click", create_proxy(generate_multiple_examples))
+            
+            # Add vocabulary manual form
+            js.document.getElementById("btn-vocab-save-single").addEventListener("click", create_proxy(save_single_word_manual))
+            
+            # Category management events
+            js.document.getElementById("btn-cat-add").addEventListener("click", create_proxy(add_custom_category))
+            js.document.getElementById("cat-view-list-select").addEventListener("change", create_proxy(refresh_category_words_list))
+
+            # TOEFL quiz events
+            render_new_quiz_question()
+            js.document.getElementById("btn-quiz-submit").addEventListener("click", create_proxy(submit_quiz_answer))
+            js.document.getElementById("btn-quiz-next").addEventListener("click", create_proxy(lambda e: render_new_quiz_question()))
+
+            # 5. Dismiss PyScript loading cover screen once fully initialized
+            loader = js.document.getElementById("loading-overlay")
+            loader.style.opacity = "0"
+            
+            async def remove_loader():
+                await asyncio.sleep(0.8)
+                loader.style.display = "none"
+            asyncio.ensure_future(remove_loader())
+
+        # Start the asynchronous event loop setup
+        asyncio.ensure_future(main())
+    </script>
+</body>
+</html>

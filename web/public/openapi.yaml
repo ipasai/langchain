@@ -1,0 +1,102 @@
+openapi: 3.0.3
+info:
+  title: LangChain Web API
+  version: 1.0.0
+  description: "Minimal OpenAPI spec for the Next.js API endpoints (LLM & DB)"
+servers:
+  - url: /api
+paths:
+  /llm:
+    post:
+      summary: LLM operations (chat, get_models, get_recommendation, providers)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [chat, get_models, get_recommendation, providers]
+                provider:
+                  type: string
+                model:
+                  type: string
+                prompt:
+                  type: string
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                      content:
+                        type: string
+                temperature:
+                  type: number
+      responses:
+        '200':
+          description: OK
+    get:
+      summary: Query LLM helper actions
+      parameters:
+        - in: query
+          name: action
+          schema:
+            type: string
+            enum: [get_models, get_recommendation, providers]
+        - in: query
+          name: provider
+          schema:
+            type: string
+        - in: query
+          name: model
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /db:
+    post:
+      summary: Database operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [test, add_word, delete_word, save_chat]
+                word:
+                  type: string
+                definition:
+                  type: string
+                english:
+                  type: string
+                content:
+                  type: string
+      responses:
+        '200':
+          description: OK
+    get:
+      summary: DB read operations
+      parameters:
+        - in: query
+          name: action
+          schema:
+            type: string
+            enum: [list_words, search_words, list_chats, stats]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: q
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+components: {}

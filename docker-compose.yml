@@ -1,0 +1,49 @@
+version: '3.8'
+services:
+  chroma:
+    build:
+      context: .
+      dockerfile: Dockerfile.chroma
+    volumes:
+      - ./data/chroma_db:/app/data/chroma_db
+      - ./data/uploads:/app/data/uploads
+    ports:
+      - 8001:8001
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    environment:
+      - CHROMA_SERVER_URL=http://chroma:8001
+    ports:
+      - 3000:3000
+    depends_on:
+      - chroma
+    restart: unless-stopped
+version: '3.8'
+services:
+  web:
+    build: ./web
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - OPENAI_API_KEY
+      - OLLAMA_BASE_URL
+      - GOOGLE_API_KEY
+      - DB_PATH=./data/app_memory.db
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+# Optional python backend service (if you still run the Python server)
+  backend:
+    image: python:3.11
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: bash -c "pip install -r requirements.txt && python main.py"
+    ports:
+      - '8000:8000'
+    restart: "no"
