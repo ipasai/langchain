@@ -5,6 +5,7 @@ const tabs = [
   { id: 'database', label: '🗄️ 資料庫管理' },
   { id: 'english', label: '📘 英文學習' },
   { id: 'documents', label: '📄 智慧文件分析' },
+  { id: 'tts', label: '🎧 Markdown 轉 MP3' },
   { id: 'data', label: '📊 資料分析' },
 ]
 

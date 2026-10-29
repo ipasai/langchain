@@ -181,7 +181,16 @@ export default function Chat({ settings = {} }) {
         body: JSON.stringify(requestBody),
       })
 
-      if (!res.ok) throw new Error(await res.text())
+      if (!res.ok) {
+        let errMsg = ''
+        try {
+          const errJson = await res.json()
+          errMsg = errJson.message || errJson.error || JSON.stringify(errJson)
+        } catch {
+          errMsg = await res.text()
+        }
+        throw new Error(errMsg || `HTTP ${res.status}`)
+      }
 
       const assistantId = crypto.randomUUID()
       let assistantText = ''
@@ -328,17 +337,23 @@ export default function Chat({ settings = {} }) {
 
         {/* 輸入框 */}
         <div className="flex gap-2">
-          <input
+          <textarea
             ref={inputRef}
-            className="flex-1 border border-gray-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows={2}
+            className="flex-1 border border-gray-300 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y text-sm"
             placeholder={currentSession ? `在「${currentSession.name}」中輸入訊息…` : '請先選擇或建立對話分組'}
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                send()
+              }
+            }}
             disabled={loading || !currentSessionId}
           />
           <button
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium self-stretch flex items-center justify-center shrink-0"
             onClick={send}
             disabled={loading || !currentSessionId}
           >

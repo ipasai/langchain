@@ -40,6 +40,14 @@ export default function DBManager() {
   const [queryResult, setQueryResult] = useState(null)
   const [sqlMessage, setSqlMessage] = useState('')
 
+  // ── 自然語言轉 SQL 狀態 ───────────────────────────────────────
+  const [nlPrompt, setNlPrompt] = useState('')
+  const [generatedSql, setGeneratedSql] = useState('')
+  const [generatedExplanation, setGeneratedExplanation] = useState('')
+  const [nlError, setNlError] = useState('')
+  const [nlCopied, setNlCopied] = useState(false)
+  const [overlayLabel, setOverlayLabel] = useState('AI 正在分析資料庫…')
+
   // ── CRUD 狀態 ───────────────────────────────────────────────
   const [crudMode, setCrudMode] = useState('insert')
   const [crudTable, setCrudTable] = useState('')
@@ -85,7 +93,6 @@ export default function DBManager() {
       setLlmAnalysis('')
       setLlmDone(false)
       setLlmMeta(null)
-      setLlmElapsed(0)
       setActiveTab('tables')
       analyzeWithLLM(data)
     } catch (error) {
@@ -150,6 +157,7 @@ export default function DBManager() {
 
 ${tableDetails}`
 
+    setOverlayLabel('AI 正在分析資料庫結構…')
     await llmRun(async () => {
       const startTime = Date.now()
       const useStream = provider === 'openai' || provider === 'ollama'
@@ -160,7 +168,16 @@ ${tableDetails}`
         signal: controller.signal,
       })
 
-      if (!res.ok) throw new Error(await res.text())
+      if (!res.ok) {
+        let msg = ''
+        try {
+          const errJson = await res.json()
+          msg = errJson.message || errJson.error || JSON.stringify(errJson)
+        } catch {
+          msg = await res.text()
+        }
+        throw new Error(msg || `HTTP ${res.status}`)
+      }
 
       if (useStream && res.body) {
         const reader = res.body.getReader()
@@ -220,13 +237,18 @@ ${tableDetails}`
   }
 
   // ── 執行 SQL ────────────────────────────────────────────────
-  async function runSql() {
+  async function runSql(sqlOverride) {
+    const targetQuery = typeof sqlOverride === 'string' ? sqlOverride : query
+    if (!targetQuery || !targetQuery.trim()) {
+      setSqlMessage('❌ 請先輸入 SQL 語句')
+      return
+    }
     setLoading(true)
     setSqlMessage('')
     try {
       const data = dbType === 'sqlite'
-        ? await call('execute_sql', { query })
-        : await call('external_sql', { config: connectionConfig(), query })
+        ? await call('execute_sql', { query: targetQuery })
+        : await call('external_sql', { config: connectionConfig(), query: targetQuery })
       setQueryResult(data)
       setSqlMessage(`✅ SQL 執行成功，共 ${data.rows?.length ?? 0} 列`)
     } catch (error) {
@@ -234,6 +256,131 @@ ${tableDetails}`
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── 自然語言轉 SQL ──────────────────────────────────────────
+  async function generateSqlFromNL() {
+    if (!nlPrompt.trim()) {
+      setNlError('請先輸入想要查詢的自然語言描述')
+      return
+    }
+    if (!isSQLSupported) {
+      setNlError('目前僅支援關聯式 SQL 資料庫（SQLite, MySQL, PostgreSQL, MariaDB）')
+      return
+    }
+    setNlError('')
+    setGeneratedSql('')
+    setGeneratedExplanation('')
+
+    // 若尚未載入 schema，先嘗試取得
+    let currentAnalysis = analysis
+    if (!currentAnalysis) {
+      try {
+        setLoading(true)
+        currentAnalysis = dbType === 'sqlite'
+          ? await call('inspect')
+          : await call('external_test', { config: connectionConfig() })
+        setAnalysis(currentAnalysis)
+      } catch (e) {
+        setNlError(`無法取得資料庫結構：${e.message}。請先至「連線設定」確認連線正常。`)
+        return
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    const tableDetails = (currentAnalysis?.tables || []).map((t) => {
+      const cols = (t.columns || []).map((c) =>
+        `    - ${c.name} (${c.type}${c.pk ? ', PRIMARY KEY' : ''})`
+      ).join('\n')
+      return `  資料表「${t.name}」：\n${cols || '    （無欄位資訊）'}`
+    }).join('\n\n')
+
+    const prompt = `你是一位資深的 ${dbType} 資料庫架構師。請根據下方提供的資料庫結構，將使用者的自然語言查詢需求轉換為精準且完全相容 ${dbType} 語法的 SQL 查詢。
+
+--- 資料庫結構 ---
+類型：${dbType}
+資料庫：${currentAnalysis?.database || filepath}
+${tableDetails || '（無資料表結構資訊）'}
+
+--- 使用者查詢需求 ---
+${nlPrompt.trim()}
+
+請嚴格遵循以下輸出格式：
+1. 必須提供一個以 \`\`\`sql 開頭、以 \`\`\` 結尾的完整 SQL 程式碼區塊，裡面只能放可直接執行的 SQL，不要放額外註釋或說明。
+2. 在代碼區塊下方，請附上 1~2 句簡要的繁體中文說明（例如使用的篩選條件或排序邏輯）。`
+
+    // 讀取設定
+    let provider = 'openai'
+    let model = 'gpt-4o-mini'
+    try {
+      const saved = JSON.parse(localStorage.getItem('tab_settings_database') || '{}')
+      if (saved.provider) provider = saved.provider
+      if (saved.model) model = saved.model.split(' (')[0]
+    } catch (_) {}
+
+    setOverlayLabel('AI 正在透過自然語言生成 SQL…')
+    setLlmMeta({ model, provider, thinkMs: 0 })
+
+    await llmRun(async () => {
+      const startTime = Date.now()
+      const res = await fetch('/api/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'chat',
+          provider,
+          model,
+          temperature: 0.1,
+          prompt,
+          stream: false,
+        }),
+      })
+
+      if (!res.ok) {
+        let msg = ''
+        try {
+          const errJson = await res.json()
+          msg = errJson.message || errJson.error || JSON.stringify(errJson)
+        } catch {
+          msg = await res.text()
+        }
+        throw new Error(msg || `HTTP ${res.status}`)
+      }
+
+      const json = await res.json()
+      const rawText = json?.text || ''
+
+      // 解析 SQL 與說明
+      const sqlMatch = rawText.match(/```(?:sql)?\s*([\s\S]*?)\s*```/i)
+      let extractedSql = ''
+      let explanation = ''
+      if (sqlMatch) {
+        extractedSql = sqlMatch[1].trim()
+        explanation = rawText.replace(sqlMatch[0], '').trim()
+      } else {
+        const lines = rawText.split('\n')
+        const firstSqlIdx = lines.findIndex(l => /^\s*(SELECT|INSERT|UPDATE|DELETE|WITH|SHOW|CREATE|ALTER|DROP)\b/i.test(l))
+        if (firstSqlIdx !== -1) {
+          extractedSql = lines.slice(firstSqlIdx).join('\n').trim()
+          explanation = lines.slice(0, firstSqlIdx).join('\n').trim()
+        } else {
+          extractedSql = rawText.trim()
+        }
+      }
+
+      setGeneratedSql(extractedSql)
+      setGeneratedExplanation(explanation)
+      setLlmMeta({ model, provider, thinkMs: Date.now() - startTime })
+    }, {
+      feature: 'db_nl2sql',
+      action: '自然語言生成 SQL',
+      model,
+      provider,
+      note: nlPrompt.slice(0, 50),
+    }).catch(err => {
+      setNlError(`生成失敗：${err.message}`)
+    })
   }
 
   // ── CRUD ────────────────────────────────────────────────────
@@ -293,7 +440,7 @@ ${tableDetails}`
         model={llmMeta?.model || ''}
         provider={llmMeta?.provider || ''}
         elapsed={llmElapsed}
-        label="AI 正在分析資料庫…"
+        label={overlayLabel || 'AI 正在處理…'}
       />
       <header>
         <h2 className="text-xl font-bold text-indigo-700">🗄️ 資料庫管理</h2>
@@ -494,27 +641,153 @@ ${tableDetails}`
 
       {/* ── 頁籤：SQL 查詢 ── */}
       {activeTab === 'sql' && (
-        <section className="space-y-3">
-          <h3 className="font-semibold text-indigo-900">SQL 查詢編輯器</h3>
-          <textarea
-            className="min-h-36 w-full rounded-lg border p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runSql() }}
-            placeholder="輸入 SQL 語句（Ctrl+Enter 執行）"
-          />
-          <div className="flex items-center gap-3">
-            <button
-              className="rounded-lg bg-indigo-600 px-5 py-2 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-              onClick={runSql} disabled={loading}
-            >
-              {loading ? '執行中…' : '▶️ 執行 SQL'}
-            </button>
-            {sqlMessage && (
-              <span className={`text-sm font-medium ${sqlMessage.startsWith('✅') ? 'text-emerald-700' : 'text-red-600'}`}>
-                {sqlMessage}
+        <section className="space-y-4">
+          {/* 自然語言轉 SQL 區塊 */}
+          <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/80 via-purple-50/40 to-white p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🧠</span>
+                <div>
+                  <h4 className="font-bold text-indigo-900 text-sm sm:text-base">自然語言轉 SQL（Text-to-SQL）</h4>
+                  <p className="text-xs text-slate-500">輸入中文需求，AI 會自動根據當前資料庫結構生成對應的 SQL 語法</p>
+                </div>
+              </div>
+              <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                AI 智慧輔助
               </span>
+            </div>
+
+            {/* 快速提示範例 */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-slate-400 font-medium">常見範例：</span>
+              {[
+                '查詢最新 10 筆學習英文單字紀錄',
+                '統計各單字分類的單字數量並由多到少排列',
+                '查詢測驗正確率低於 60% 的歷史紀錄',
+                '查詢各資料表的名稱與記錄筆數',
+              ].map((sample) => (
+                <button
+                  key={sample}
+                  type="button"
+                  className="rounded-full border border-indigo-200 bg-white px-2.5 py-1 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 transition"
+                  onClick={() => setNlPrompt(sample)}
+                >
+                  {sample}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <textarea
+                rows={2}
+                className="flex-1 rounded-lg border border-slate-300 bg-white p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-y"
+                placeholder="請用自然語言描述想查詢的內容（例如：查詢所有測驗總分大於 80 分的紀錄，依時間新到舊排序）…"
+                value={nlPrompt}
+                onChange={(e) => setNlPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    generateSqlFromNL()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="self-stretch sm:self-auto rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition shrink-0 flex items-center justify-center gap-1.5 text-sm"
+                onClick={generateSqlFromNL}
+                disabled={llmLoading || !nlPrompt.trim()}
+              >
+                <span>✨</span> 生成 SQL
+              </button>
+            </div>
+
+            {nlError && (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-2.5 text-xs text-red-600">
+                ❌ {nlError}
+              </div>
             )}
+
+            {/* 生成結果卡片 */}
+            {generatedSql && (
+              <div className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-slate-100 space-y-2">
+                <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-2 flex-wrap gap-2">
+                  <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                    <span>💡</span> 建議 SQL 語法（{dbType}）
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="rounded bg-slate-800 px-2 py-1 hover:bg-slate-700 text-xs text-slate-200 transition"
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedSql)
+                        setNlCopied(true)
+                        setTimeout(() => setNlCopied(false), 2000)
+                      }}
+                    >
+                      {nlCopied ? '✅ 已複製！' : '📋 複製 SQL'}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded bg-indigo-600 px-2.5 py-1 font-medium text-xs text-white hover:bg-indigo-500 transition"
+                      onClick={() => {
+                        setQuery(generatedSql)
+                        setSqlMessage('📋 已將 AI 產生的 SQL 填入編輯器')
+                      }}
+                    >
+                      📥 填入編輯器
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded bg-emerald-600 px-2.5 py-1 font-semibold text-xs text-white hover:bg-emerald-500 transition"
+                      onClick={() => {
+                        setQuery(generatedSql)
+                        runSql(generatedSql)
+                      }}
+                    >
+                      ▶️ 填入並執行
+                    </button>
+                  </div>
+                </div>
+
+                <pre className="font-mono text-xs text-emerald-400 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                  {generatedSql}
+                </pre>
+
+                {generatedExplanation && (
+                  <p className="text-xs text-slate-400 border-t border-slate-800 pt-2 leading-relaxed">
+                    <span className="text-indigo-300 font-medium">說明：</span>{generatedExplanation}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 原有 SQL 編輯器 */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-indigo-900">SQL 查詢編輯器</h3>
+              <span className="text-xs text-slate-400">快速鍵：Ctrl+Enter 或 Cmd+Enter 執行</span>
+            </div>
+            <textarea
+              className="min-h-32 w-full rounded-lg border p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runSql() }}
+              placeholder="輸入 SQL 語句（Ctrl+Enter 執行）"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                className="rounded-lg bg-indigo-600 px-5 py-2 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+                onClick={() => runSql()} disabled={loading}
+              >
+                {loading ? '執行中…' : '▶️ 執行 SQL'}
+              </button>
+              {sqlMessage && (
+                <span className={`text-sm font-medium ${sqlMessage.startsWith('✅') ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {sqlMessage}
+                </span>
+              )}
+            </div>
           </div>
 
           {queryResult && (

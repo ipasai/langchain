@@ -8,7 +8,10 @@ function getOllamaModels(baseUrl) {
 
 function getModelRecommendation(modelName) {
   const name = (modelName || '').toLowerCase()
+  if (name.includes(':cloud')) return '需登入 Ollama 雲端憑證'
   if (name.includes('embed')) return '向量嵌入 / 不適合對話'
+  if (name.includes('1.5b') || name.includes('0.5b')) return '⚡ 輕量推薦 (筆電 CPU 順暢)'
+  if (name.includes('7b') || name.includes('8b')) return '重量級 (7B~8B 需較大 RAM，本機 CPU 載入較慢)'
   if (name.includes('coder') || name.includes('code')) return '程式開發 / 編輯 / 代碼補全'
   if (name.includes('taiwan')) return '繁中對話 / 台灣在地知識'
   if (name.includes('deepseek')) return '深度推理 / Agent 代理 / 複雜邏輯'
@@ -91,61 +94,87 @@ export default async function handler(req, res) {
       if (provider === 'openai') {
         const apiKey = process.env.OPENAI_API_KEY
         if (!apiKey) return res.status(400).json({ error: 'no_openai_key', message: 'Set OPENAI_API_KEY in env.' })
-        const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model, messages: messages || [], temperature, stream: true }),
-        })
-        if (!upstream.ok || !upstream.body) return res.status(upstream.status).send(await upstream.text())
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
-        res.setHeader('Cache-Control', 'no-cache, no-transform')
-        res.setHeader('Connection', 'keep-alive')
-        const reader = upstream.body.getReader()
-        const decoder = new TextDecoder()
         try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            res.write(decoder.decode(value, { stream: true }))
+          const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({ model, messages: messages || [], temperature, stream: true }),
+          })
+          if (!upstream.ok || !upstream.body) {
+            const errText = await upstream.text()
+            return res.status(upstream.status).json({ error: 'openai_error', message: errText || `OpenAI 回傳狀態碼 ${upstream.status}` })
           }
-        } finally { res.end() }
-        return
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+          res.setHeader('Cache-Control', 'no-cache, no-transform')
+          res.setHeader('Connection', 'keep-alive')
+          const reader = upstream.body.getReader()
+          const decoder = new TextDecoder()
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              res.write(decoder.decode(value, { stream: true }))
+            }
+          } finally { res.end() }
+          return
+        } catch (err) {
+          return res.status(500).json({ error: 'openai_fetch_failed', message: `OpenAI 連線失敗: ${err.message}` })
+        }
       }
 
       if (provider === 'ollama') {
         const base = process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
         const promptText = messages ? messages.map(m => `${m.role}: ${m.content}`).join('\n') : (body.prompt || '')
-        const upstream = await fetch(`${base.replace(/\/$/, '')}/api/generate`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, prompt: promptText, temperature, stream: true }),
-        })
-        if (!upstream.ok || !upstream.body) return res.status(upstream.status).send(await upstream.text())
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
-        res.setHeader('Cache-Control', 'no-cache, no-transform')
-        res.setHeader('Connection', 'keep-alive')
-        const reader = upstream.body.getReader()
-        const decoder = new TextDecoder()
-        const encoder = new TextEncoder()
-        let buffer = ''
         try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-            for (const line of lines) {
-              if (!line.trim()) continue
-              try {
-                const chunk = JSON.parse(line)
-                if (chunk.response) res.write(`data: ${JSON.stringify({ text: chunk.response })}\n\n`)
-              } catch (e) {}
+          const upstream = await fetch(`${base.replace(/\/$/, '')}/api/generate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, prompt: promptText, temperature, stream: true }),
+          })
+          if (!upstream.ok || !upstream.body) {
+            const errText = await upstream.text()
+            if (upstream.status === 401) {
+              return res.status(401).json({
+                error: 'ollama_401',
+                message: `該模型 (${model}) 需登入 Ollama.com 帳號憑證授權 (401 Unauthorized)，無法直接在本地調用。`
+              })
             }
+            return res.status(upstream.status).json({
+              error: 'ollama_error',
+              message: errText || `Ollama 回傳錯誤狀態碼: ${upstream.status}`
+            })
           }
-        } finally { res.write('data: [DONE]\n\n'); res.end() }
-        return
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+          res.setHeader('Cache-Control', 'no-cache, no-transform')
+          res.setHeader('Connection', 'keep-alive')
+          const reader = upstream.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              buffer += decoder.decode(value, { stream: true })
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
+              for (const line of lines) {
+                if (!line.trim()) continue
+                try {
+                  const chunk = JSON.parse(line)
+                  if (chunk.response) res.write(`data: ${JSON.stringify({ text: chunk.response })}\n\n`)
+                } catch (e) {}
+              }
+            }
+          } finally { res.write('data: [DONE]\n\n'); res.end() }
+          return
+        } catch (fetchErr) {
+          const isTimeout = fetchErr.name === 'HeadersTimeoutError' || fetchErr.code === 'UND_ERR_HEADERS_TIMEOUT' || fetchErr.message?.includes('timeout')
+          const msg = isTimeout
+            ? `模型「${model}」載入逾時（超過 5 分鐘）！本機規格為 8GB 記憶體，7B/8B 大型模型由 CPU 載入耗時過長導致逾時。建議切換為輕量模型（如 qwen2.5:1.5b）或使用雲端 API (OpenAI / Gemini)。`
+            : `無法連線至 Ollama 服務 (${fetchErr.message})，請確認 Ollama 容器是否正在運行。`
+          return res.status(500).json({ error: 'ollama_fetch_failed', message: msg })
+        }
       }
       // Google has no compatible stream in this adapter; fall through to normal response.
     }

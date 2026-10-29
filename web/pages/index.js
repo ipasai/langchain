@@ -4,6 +4,7 @@ import DBManager from '../components/DBManager'
 import EnglishLearning from '../components/EnglishLearning'
 import DocAnalyzer from '../components/DocAnalyzer'
 import DataAnalysis from '../components/DataAnalysis'
+import MarkdownToSpeech from '../components/MarkdownToSpeech'
 import AppTabs from '../components/AppTabs'
 import SettingsSidebar from '../components/SettingsSidebar'
 import { DEFAULT_SETTINGS, TAB_DEFAULT_PERSONA, PERSONAS } from '../lib/personas'
@@ -131,7 +132,8 @@ export default function Home() {
             database:  <DBManager />,
             english:   <EnglishLearning />,
             documents: <DocAnalyzer />,
-            data:      <DataAnalysis />,
+            tts:       <MarkdownToSpeech settings={settings} />,
+            data:      <DataAnalysis settings={settings} />,
           }} />
         </section>
       </main>
